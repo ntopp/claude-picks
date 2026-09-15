@@ -4,6 +4,7 @@ import { config, DEFAULT_SETTINGS, type Settings } from './config.js';
 
 export const db = new DatabaseSync(path.join(config.dataDir, 'picks.db'));
 db.exec('PRAGMA journal_mode = WAL');
+db.exec('PRAGMA busy_timeout = 5000'); // the CLI scripts and the server share this file; wait for locks instead of throwing
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS settings (
