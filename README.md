@@ -88,7 +88,7 @@ server/src
   stats.ts        the scoreboard
   review.ts       weekly review
   routes.ts       API for the dashboard
-  scheduler.ts    grading every 30 min, Wednesday scan, Tuesday review
+  scheduler.ts    grading (5 min live / 30 min), Monday line snapshot, Wednesday scan, Tuesday review
 web/src
   pages/          Picks, Results, Scoreboard, Runs, Settings
   components/     ProposalCard (execute / pass), UnitsChart

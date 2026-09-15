@@ -56,6 +56,10 @@ export function upsertGame(g: ScoreboardGame) {
     g.home.id, g.home.abbr, g.home.name, g.home.rank, g.away.id, g.away.abbr, g.away.name, g.away.rank,
     g.neutral ? 1 : 0, g.status, g.home.score, g.away.score, openJson, linesJson, closing, g.lines ? nowIso() : null, nowIso(),
   );
+  // Keep the history: one row each time the number changes while the game is still open.
+  if (!started && linesJson && linesJson !== existing?.lines_json) {
+    db.prepare('INSERT INTO line_snapshots (game_id, ts, lines_json) VALUES (?, ?, ?)').run(g.id, nowIso(), linesJson);
+  }
 }
 
 function wantsDetail(g: ScoreboardGame, opts: BuildOptions): boolean {

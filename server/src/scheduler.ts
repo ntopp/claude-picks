@@ -4,11 +4,13 @@ import { db, getSettings, logEvent } from './db.js';
 import { runApiScan } from './engine/run.js';
 import { gameInProgress, syncAndGrade } from './grading.js';
 import { buildReview } from './review.js';
+import { buildPacket } from './slate.js';
 
 /**
  * Every 5 minutes while one of our games is being played, otherwise every 30: refresh any week
  * that still has an ungraded pick (captures line moves, freezes the closing line at kickoff,
- * grades finals). Wednesday 10:00: weekly API scan if enabled. Tuesday 08:00: weekly review.
+ * grades finals). Monday 08:00: lines-only snapshot of the whole slate. Wednesday 10:00: weekly API
+ * scan if enabled. Tuesday 08:00: weekly review.
  */
 export function startScheduler() {
   const tz = config.displayTz;
@@ -38,6 +40,21 @@ export function startScheduler() {
         await runApiScan('weekly');
       } catch {
         /* logged inside */
+      }
+    },
+    { timezone: tz },
+  );
+
+  // Monday 08:00: snapshot the whole upcoming slate (lines only, no per-game detail) so every
+  // game has a Monday number on record, not just the ones we end up betting.
+  cron.schedule(
+    '0 8 * * 1',
+    async () => {
+      try {
+        const p = await buildPacket({ noDetail: true });
+        logEvent('info', `Monday line snapshot: ${p.leagues.map((l) => `${l.league} wk ${l.week} ${l.games.length} games`).join(', ')}`);
+      } catch (e) {
+        logEvent('warn', `Monday line snapshot failed: ${(e as Error).message}`);
       }
     },
     { timezone: tz },

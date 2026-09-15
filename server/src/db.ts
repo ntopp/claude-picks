@@ -88,6 +88,15 @@ CREATE TABLE IF NOT EXISTS proposals (
 CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status);
 CREATE INDEX IF NOT EXISTS idx_proposals_game ON proposals(game_id);
 
+-- Every distinct line we have seen for a game, so open -> Monday -> midweek -> close is reconstructible.
+CREATE TABLE IF NOT EXISTS line_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id TEXT NOT NULL REFERENCES games(id),
+  ts TEXT NOT NULL,
+  lines_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_snapshots_game ON line_snapshots(game_id, ts);
+
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts TEXT NOT NULL,
