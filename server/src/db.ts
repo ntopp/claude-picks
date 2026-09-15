@@ -89,6 +89,17 @@ CREATE TABLE IF NOT EXISTS proposals (
 CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status);
 CREATE INDEX IF NOT EXISTS idx_proposals_game ON proposals(game_id);
 
+-- The engine's read on every game it evaluated, bet or not (latest run wins). Lets the board show a
+-- lean + confidence for the whole slate and lets us grade leans separately from picks.
+CREATE TABLE IF NOT EXISTS game_views (
+  game_id TEXT PRIMARY KEY REFERENCES games(id),
+  run_id INTEGER REFERENCES runs(id),
+  updated_at TEXT NOT NULL,
+  lean TEXT NOT NULL,
+  confidence INTEGER NOT NULL,
+  note TEXT NOT NULL
+);
+
 -- Every distinct line we have seen for a game, so open -> Monday -> midweek -> close is reconstructible.
 CREATE TABLE IF NOT EXISTS line_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

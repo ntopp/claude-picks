@@ -106,6 +106,7 @@ export type Scoreboard = {
 export type Dashboard = {
   pending: Proposal[];
   live: Proposal[];
+  passed: Proposal[];
   recent: Proposal[];
   scoreboard: { engine: Bucket; human: Bucket; bankroll: Scoreboard['bankroll']; breakEven: number; unitDollars: number };
   settings: Settings;
@@ -137,6 +138,33 @@ export type RunDetail = Run & {
   } | null;
   proposals: Proposal[];
 };
+
+export type Lines = {
+  provider: string;
+  spreadHome: number | null;
+  spreadHomePrice: number | null;
+  spreadAwayPrice: number | null;
+  total: number | null;
+  overPrice: number | null;
+  underPrice: number | null;
+  mlHome: number | null;
+  mlAway: number | null;
+};
+
+export type SlateGame = {
+  id: string;
+  kickoff: string;
+  name: string;
+  home: { abbr: string; name: string; rank: number | null; score: number | null };
+  away: { abbr: string; name: string; rank: number | null; score: number | null };
+  neutral: boolean;
+  status: string;
+  lines: Lines | null;
+  open: Lines | null;
+  view: { lean: string; confidence: number | null; note: string | null; at: string | null } | null;
+  proposal: { id: number; pick: string; status: string; confidence: number; result: string | null } | null;
+};
+export type Slate = { league: League; season: number | null; week: number | null; games: SlateGame[] };
 
 export type ReviewRow = { id: number; created_at: string; label: string; report_md: string; narrative: string | null };
 
@@ -174,6 +202,7 @@ export const api = {
   pass: (id: number, note?: string) => call<{ ok: boolean }>(`/proposals/${id}/pass`, { method: 'POST', body: JSON.stringify({ note }) }),
   undo: (id: number) => call<{ ok: boolean }>(`/proposals/${id}/undo`, { method: 'POST' }),
   scoreboard: () => call<Scoreboard>('/scoreboard'),
+  slate: (league: League) => call<Slate>(`/slate?league=${league}`),
   runs: () => call<Run[]>('/runs'),
   run: (id: number) => call<RunDetail>(`/runs/${id}`),
   scan: (note?: string, leagues?: League[]) => call<{ started: boolean }>('/scan', { method: 'POST', body: JSON.stringify({ note, leagues }) }),

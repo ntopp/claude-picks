@@ -31,7 +31,7 @@ Things that are NOT edges: recent-form narratives the whole world can see, "reve
 - Do not repeat the packet back. The thesis is 2-4 sentences: the edge, why the market has not priced it, what would make you wrong. Key factors are short bullet facts.
 
 ## Output
-Return only JSON matching SlateResponseSchema: week_summary (the shape of the week and where the market looked soft), proposals[], passes[] (games you seriously considered and rejected, with why — this is graded qualitatively too), teaching_note (one thing this slate teaches about betting).`;
+Return only JSON matching SlateResponseSchema: week_summary (the shape of the week and where the market looked soft), proposals[], passes[] (games you seriously considered and rejected, with why — this is graded qualitatively too), board[] (one entry per game you evaluated, both leagues: the side you would take if forced in market terms like "BUF -4.5" / "Under 53.5" / "DET ML" / "no lean", a confidence 1-10 where anything under 5 means no bet, and a one-line note — the board is the whole slate, so cover every game with a line even if the note is "nothing here"), teaching_note (one thing this slate teaches about betting).`;
 
 export const RED_TEAM = `You are the adversarial reviewer for a football betting experiment. You receive a set of proposed picks with the analyst's thesis and bear case, and the packet they were drawn from. For each pick, decide whether it survives scrutiny.
 

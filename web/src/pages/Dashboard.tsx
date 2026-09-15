@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, fmtMoney, fmtPct, fmtUnits, signClass, type Dashboard as DashboardData, type Status } from '../api';
 import { ProposalCard } from '../components/ProposalCard';
+import { DecidedRow } from '../components/DecidedRow';
+import { Board } from '../components/Board';
 import { useToast } from '../toast';
 
 export function Dashboard({ status, onChanged }: { status: Status; onChanged: () => void }) {
   const toast = useToast();
   const [data, setData] = useState<DashboardData | null>(null);
   const [busy, setBusy] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -24,6 +27,7 @@ export function Dashboard({ status, onChanged }: { status: Status; onChanged: ()
   const changed = () => {
     load();
     onChanged();
+    setRefreshKey((k) => k + 1);
   };
 
   const grade = async () => {
@@ -104,14 +108,39 @@ export function Dashboard({ status, onChanged }: { status: Status; onChanged: ()
 
       {data.live.length > 0 && (
         <div className="card">
-          <h2>Your open bets ({data.live.length})</h2>
-          <div className="grid">
-            {data.live.map((p) => (
-              <ProposalCard key={p.id} p={p} tz={tz} maxUnits={data.settings.maxUnitsPerBet} onChanged={changed} />
-            ))}
+          <h2>
+            Your open bets ({data.live.length}) <span className="right muted small">tap a row for the full write-up</span>
+          </h2>
+          <div className="table-wrap">
+            <table className="decided">
+              <tbody>
+                {data.live.map((p) => (
+                  <DecidedRow key={p.id} p={p} tz={tz} maxUnits={data.settings.maxUnitsPerBet} onChanged={changed} />
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
+
+      {data.passed.length > 0 && (
+        <div className="card">
+          <h2>
+            Passed this week ({data.passed.length}) <span className="right muted small">still graded for the engine</span>
+          </h2>
+          <div className="table-wrap">
+            <table className="decided">
+              <tbody>
+                {data.passed.map((p) => (
+                  <DecidedRow key={p.id} p={p} tz={tz} maxUnits={data.settings.maxUnitsPerBet} onChanged={changed} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <Board tz={tz} refreshKey={refreshKey} />
 
       {data.recent.length > 0 && (
         <div className="card">

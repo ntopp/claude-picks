@@ -9,7 +9,7 @@ import { closingLineValue, pickLabel, pickedFrom, type Lines } from '../odds.js'
 import { buildPacket, renderPacketMarkdown, type Packet, type PacketGame } from '../slate.js';
 import { notify } from '../notify.js';
 import { runClaudeSlate, runRedTeam } from './claude.js';
-import { type ProposalInput, type SlateResponse } from './schema.js';
+import { type BoardEntry, type ProposalInput, type SlateResponse } from './schema.js';
 
 export type RunKind = 'weekly' | 'adhoc';
 
@@ -115,6 +115,22 @@ export function insertProposals(runId: number | null, packet: Packet, inputs: Pr
   return { inserted, dropped };
 }
 
+/** Store the engine's read on each game it evaluated; unknown game ids are ignored. */
+export function upsertViews(runId: number | null, packet: Packet, board: BoardEntry[]): number {
+  const ids = new Set(packet.leagues.flatMap((l) => l.games.map((g) => g.id)));
+  const stmt = db.prepare(
+    `INSERT INTO game_views (game_id, run_id, updated_at, lean, confidence, note) VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(game_id) DO UPDATE SET run_id = excluded.run_id, updated_at = excluded.updated_at, lean = excluded.lean, confidence = excluded.confidence, note = excluded.note`,
+  );
+  let n = 0;
+  for (const b of board) {
+    if (!ids.has(b.game_id)) continue;
+    stmt.run(b.game_id, runId, nowIso(), b.lean.trim() || 'no lean', b.confidence, b.note.trim());
+    n++;
+  }
+  return n;
+}
+
 /** One line per pick for the push notification body. */
 function pickList(ids: number[]): string {
   return ids
@@ -128,8 +144,9 @@ export function recordSessionSlate(kind: RunKind, packet: Packet, response: Slat
   expireStaleProposals();
   const runId = createRun(kind, 'session', packet);
   const result = insertProposals(runId, packet, response.proposals);
+  const views = upsertViews(runId, packet, response.board);
   finishRun(runId, { summary: response.week_summary, response_json: JSON.stringify({ ...response, dropped: result.dropped }) });
-  logEvent('info', `Session slate: ${result.inserted.length} proposal(s) inserted, ${result.dropped.length} dropped`, result);
+  logEvent('info', `Session slate: ${result.inserted.length} proposal(s) inserted, ${result.dropped.length} dropped, ${views} game view(s)`, result);
   if (result.inserted.length) void notify(`${result.inserted.length} new pick(s) to review`, pickList(result.inserted), { priority: 'high', tags: 'football,bell' });
   return { runId, ...result };
 }
@@ -165,6 +182,7 @@ export async function runApiScan(kind: RunKind, opts: { userNote?: string; leagu
       scan.usage.output += red.usage.output;
     }
     const result = insertProposals(runId, packet, proposals);
+    upsertViews(runId, packet, scan.parsed.board);
     finishRun(runId, {
       summary: scan.parsed.week_summary,
       response_json: JSON.stringify({ ...scan.parsed, model: scan.model, red_team: red?.parsed ?? null, red_summary: redSummary, dropped: result.dropped, searches: scan.usage.searches }),

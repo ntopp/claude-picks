@@ -171,3 +171,17 @@ pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px
 @supports (padding: env(safe-area-inset-top)) {
   .topbar { padding-top: calc(8px + env(safe-area-inset-top)); }
 }
+
+/* board + decided rows */
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.segmented button { background: transparent; border: 0; color: var(--muted); padding: 5px 12px; cursor: pointer; font-size: 13px; }
+.segmented button.active { background: var(--bg-3); color: var(--text); font-weight: 600; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: color-mix(in srgb, var(--bg-3) 60%, transparent); }
+tr.has-pick td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+tr.note-row td { white-space: normal; border-bottom: 1px solid var(--border); font-size: 14px; }
+table.board td, table.decided td { vertical-align: middle; }
+@media (max-width: 700px) {
+  .segmented button { padding: 8px 10px; }
+  .card h2 .right.row { width: 100%; margin-top: 6px; }
+}

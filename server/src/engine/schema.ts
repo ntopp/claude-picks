@@ -31,12 +31,27 @@ export const ProposalSchema = z.object({
 });
 export type ProposalInput = z.infer<typeof ProposalSchema>;
 
+/**
+ * A read on one game that is NOT a bet: which way you lean, how strongly, and why in a line.
+ * Every game on the slate should get one so the board is complete; confidence under 5 means "no bet".
+ */
+export const BoardEntrySchema = z.object({
+  game_id: z.string().min(1),
+  /** The side you would take if forced, in market terms: "BUF -4.5", "Under 53.5", "DET ML", or "no lean". */
+  lean: z.string().max(40),
+  confidence: z.number().int().min(1).max(10),
+  note: z.string().max(300),
+});
+export type BoardEntry = z.infer<typeof BoardEntrySchema>;
+
 export const SlateResponseSchema = z.object({
   /** 2-5 sentences: the shape of the week, where the market looks soft, what you deliberately avoided. */
   week_summary: z.string(),
   proposals: z.array(ProposalSchema),
   /** Games you looked hard at and passed on, with the reason. Keeps the engine honest about selectivity. */
   passes: z.array(z.object({ game_id: z.string(), note: z.string() })).max(20),
+  /** One entry per game on the slate (both leagues): lean, confidence, note. Omit games you did not evaluate. */
+  board: z.array(BoardEntrySchema).max(150).default([]),
   /** One thing the user should learn from this slate about football betting. */
   teaching_note: z.string(),
 });

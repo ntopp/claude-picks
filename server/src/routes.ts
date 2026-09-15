@@ -66,9 +66,10 @@ api.get('/dashboard', (_req, res) => {
   expireStaleProposals();
   const pending = listProposals({ status: 'pending' }).map(withGame);
   const live = (db.prepare(`SELECT * FROM proposals WHERE status = 'executed' AND graded_at IS NULL ORDER BY kickoff`).all() as ProposalRow[]).map(withGame);
+  const passed = (db.prepare(`SELECT * FROM proposals WHERE status = 'passed' AND graded_at IS NULL ORDER BY kickoff`).all() as ProposalRow[]).map(withGame);
   const recent = (db.prepare(`SELECT * FROM proposals WHERE graded_at IS NOT NULL AND status != 'void' ORDER BY kickoff DESC LIMIT 12`).all() as ProposalRow[]).map(withGame);
   const sb = computeScoreboard();
-  res.json({ pending, live, recent, scoreboard: { engine: sb.engine, human: sb.human, bankroll: sb.bankroll, breakEven: sb.breakEven, unitDollars: sb.unitDollars }, settings: getSettings() });
+  res.json({ pending, live, passed, recent, scoreboard: { engine: sb.engine, human: sb.human, bankroll: sb.bankroll, breakEven: sb.breakEven, unitDollars: sb.unitDollars }, settings: getSettings() });
 });
 
 api.get('/proposals', (req, res) => {
@@ -113,6 +114,55 @@ api.post('/proposals/:id/undo', (req, res) => {
 });
 
 api.get('/scoreboard', (_req, res) => res.json(computeScoreboard()));
+
+/** This week's board for one league: every game with lines, score, the engine's view, and any pick on it. */
+api.get('/slate', async (req, res) => {
+  const league = (req.query.league === 'cfb' ? 'cfb' : 'nfl') as League;
+  const weeks = await upcomingWeeks();
+  const target =
+    weeks[league] ??
+    (db.prepare('SELECT season, week FROM games WHERE league = ? ORDER BY season DESC, week DESC LIMIT 1').get(league) as { season: number; week: number } | undefined);
+  if (!target) return res.json({ league, season: null, week: null, games: [] });
+  const rows = db
+    .prepare(
+      `SELECT g.*, v.lean, v.confidence AS view_confidence, v.note AS view_note, v.updated_at AS view_at,
+              p.id AS proposal_id, p.pick AS proposal_pick, p.status AS proposal_status, p.confidence AS proposal_confidence, p.result AS proposal_result
+       FROM games g
+       LEFT JOIN game_views v ON v.game_id = g.id
+       LEFT JOIN proposals p ON p.game_id = g.id AND p.status != 'void'
+       WHERE g.league = ? AND g.season = ? AND g.week = ?
+       ORDER BY g.kickoff, g.id`,
+    )
+    .all(league, target.season, target.week) as (GameRow & {
+    lean: string | null;
+    view_confidence: number | null;
+    view_note: string | null;
+    view_at: string | null;
+    proposal_id: number | null;
+    proposal_pick: string | null;
+    proposal_status: string | null;
+    proposal_confidence: number | null;
+    proposal_result: string | null;
+  })[];
+  res.json({
+    league,
+    season: target.season,
+    week: target.week,
+    games: rows.map((g) => ({
+      id: g.id,
+      kickoff: g.kickoff,
+      name: g.name,
+      home: { abbr: g.home_abbr, name: g.home_name, rank: g.home_rank, score: g.home_score },
+      away: { abbr: g.away_abbr, name: g.away_name, rank: g.away_rank, score: g.away_score },
+      neutral: !!g.neutral,
+      status: g.status,
+      lines: g.lines_json ? (JSON.parse(g.lines_json) as Lines) : null,
+      open: g.lines_open_json ? (JSON.parse(g.lines_open_json) as Lines) : null,
+      view: g.lean ? { lean: g.lean, confidence: g.view_confidence, note: g.view_note, at: g.view_at } : null,
+      proposal: g.proposal_id ? { id: g.proposal_id, pick: g.proposal_pick, status: g.proposal_status, confidence: g.proposal_confidence, result: g.proposal_result } : null,
+    })),
+  });
+});
 
 api.get('/games', (req, res) => {
   const league = String(req.query.league ?? 'nfl');
