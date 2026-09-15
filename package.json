@@ -1,0 +1,27 @@
+{
+  "name": "claude-picks",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Claude-assisted football betting experiment: weekly slate packet, AI proposals with bear cases, execute/pass queue, auto-grading and a scoreboard against the 52.4% break-even line.",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=server & npm run dev --workspace=web",
+    "dev:server": "npm run dev --workspace=server",
+    "dev:web": "npm run dev --workspace=web",
+    "packet": "npm run packet --workspace=server --",
+    "propose": "npm run propose --workspace=server --",
+    "grade": "npm run grade --workspace=server --",
+    "scan": "npm run scan --workspace=server --",
+    "review": "npm run review --workspace=server --",
+    "typecheck": "npm run typecheck --workspace=server && npm run typecheck --workspace=web",
+    "test": "npm test --workspace=server",
+    "start": "node scripts/start-all.mjs",
+    "stop": "node scripts/stop.mjs"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

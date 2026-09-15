@@ -1,0 +1,59 @@
+import cron from 'node-cron';
+import { config, hasAnthropicKey } from './config.js';
+import { db, getSettings, logEvent } from './db.js';
+import { runApiScan } from './engine/run.js';
+import { syncAndGrade } from './grading.js';
+import { buildReview } from './review.js';
+
+/**
+ * Every 30 minutes: refresh any week that still has an ungraded pick (captures line moves,
+ * freezes the closing line at kickoff, grades finals). Wednesday 10:00: weekly API scan if
+ * enabled. Tuesday 08:00: weekly review once there is something to review.
+ */
+export function startScheduler() {
+  const tz = config.displayTz;
+
+  cron.schedule(
+    '*/30 * * * *',
+    async () => {
+      try {
+        const r = await syncAndGrade();
+        if (r.graded) console.log(`[grade] refreshed ${r.refreshed} games, graded ${r.graded}`);
+      } catch (e) {
+        logEvent('warn', `Scheduled grading failed: ${(e as Error).message}`);
+      }
+    },
+    { timezone: tz },
+  );
+
+  cron.schedule(
+    '0 10 * * 3',
+    async () => {
+      if (!getSettings().autoScan || !hasAnthropicKey()) return;
+      try {
+        await runApiScan('weekly');
+      } catch {
+        /* logged inside */
+      }
+    },
+    { timezone: tz },
+  );
+
+  cron.schedule(
+    '0 8 * * 2',
+    async () => {
+      const n = (db.prepare(`SELECT COUNT(*) AS n FROM proposals WHERE graded_at > datetime('now', '-7 days')`).get() as { n: number }).n;
+      if (!n) return;
+      try {
+        await buildReview();
+        logEvent('info', 'Weekly review written');
+      } catch (e) {
+        logEvent('warn', `Weekly review failed: ${(e as Error).message}`);
+      }
+    },
+    { timezone: tz },
+  );
+
+  // Catch up once on boot so a machine that was asleep through Sunday grades on startup.
+  setTimeout(() => void syncAndGrade().catch((e) => logEvent('warn', `Boot grading failed: ${(e as Error).message}`)), 3000);
+}

@@ -1,0 +1,89 @@
+# Claude Picks
+
+A paper-money experiment: can Claude, with everything it can read — lines and line movement, injury reports, weather, rest and travel, coaching changes, scouting and beat-writer news — beat the closing line and the 52.4% break-even rate on NFL and college football bets over a season?
+
+Claude writes **proposals** (game, market, side, line, price, stake, confidence, thesis, bear case). You review them on a local dashboard and click **Execute** or **Pass**. After the games, the app pulls finals, settles every proposal, and keeps score — for the engine on every pick it made, and for you on the picks you took.
+
+**Nothing is ever placed with a sportsbook.** Execute logs a paper bet. The Execute / Pass buttons are the same shape as [claude-trader](../claude-trader) so the two experiments read the same way.
+
+## What it does
+
+- **Packet** — for each league, the upcoming week's slate from ESPN's public API: kickoff, records, rankings, DraftKings spread / total / moneyline with prices, the opener and how far it has moved, weather, ESPN's FPI projection, and per game the injury list, last five results and any other book's number.
+- **Engine** — either the app calls the Claude API (with web search for injury / weather / coaching news, then an adversarial red-team pass), or you run the analysis from a Claude Code session with `npm run packet` → reason → `npm run propose`. Both write to the same proposal queue.
+- **Rails** — deterministic, at insert: one pick per game, weekly pick cap, minimum confidence, stake cap, no laying heavy moneyline favorites, stale-line rejection, expiry at kickoff.
+- **Grading** — every 30 minutes the server refreshes any week with an open pick, freezes the closing line at kickoff, and settles finals. Executed, passed and expired picks are all graded.
+- **Scoreboard** — record and win rate against the break-even line, units and ROI, closing line value, engine vs you vs what you passed, and breakdowns by league, market, edge type, confidence (calibration) and week. A written review each Tuesday.
+
+## Setup
+
+Node 24+.
+
+```bash
+npm install
+```
+
+```bash
+npm run dev:server
+```
+
+```bash
+npm run dev:web
+```
+
+Open http://localhost:5174. (`npm start` runs both with auto-restart; `npm run stop` kills stray server processes.)
+
+Optional `.env` (copy `.env.example`): `ANTHROPIC_API_KEY` lets the app run scans itself from the Runs tab or on a Wednesday schedule. Without it, use the Claude Code session flow below. `NTFY_TOPIC` sends a push when picks are proposed or settled.
+
+## Weekly workflow
+
+| When | What |
+|---|---|
+| Tue–Wed | Lines are up. Run a scan (Runs tab) or the session flow. Proposals appear on the Picks tab. |
+| Wed–Sat | Execute or Pass each proposal, with a note if you like. Line movement since the pick is shown on the card. |
+| Thu–Mon | Games play; the server grades as they finish. Picks tab shows live scores on your open bets. |
+| Tue | Review is written. Read it before the next scan. |
+
+### Claude Code session engine
+
+```bash
+npm run packet
+```
+
+Point Claude at the output (or `data/packet-latest.json`), have it read the playbook in `server/src/engine/prompt.ts`, research with web search, and write a response matching `SlateResponseSchema` in `server/src/engine/schema.ts` to `data/response.json`. Then:
+
+```bash
+npm run propose -- --file data/response.json --kind weekly
+```
+
+Other commands: `npm run grade` (settle now), `npm run review` (write a review now), `npm run scan` (API engine end to end), `npm test` (settlement / CLV math).
+
+## Reading the scoreboard
+
+- **Win rate vs break-even.** At -110 you need 52.38% to profit. The bar chart draws that line.
+- **Closing line value (CLV).** How many points better your number was than where the market closed. Bettors who beat the close consistently are the ones who win long term; it is meaningful after ~30 picks, long before win rate is.
+- **Engine vs you vs passed.** The engine is scored on everything it proposed. You are scored on what you executed at your stake. Passed picks are graded as if bet, so the app can tell you whether your filter is adding value or leaving money on the table.
+- **By confidence.** A calibrated engine's 7s should win more often than its 5s. If they don't, confidence is noise.
+
+## Layout
+
+```
+server/src
+  espn.ts         ESPN scoreboard / summary client, normalized games and lines
+  slate.ts        builds the packet, records games + line snapshots, renders markdown
+  odds.ts         American odds math, settlement, closing line value (unit-tested)
+  engine/
+    prompt.ts     the playbook and red-team prompts
+    schema.ts     proposal / response schemas (zod)
+    claude.ts     API engine (structured output + web search)
+    run.ts        insert proposals through the rails
+  grading.ts      refresh scores, freeze closing lines, settle
+  stats.ts        the scoreboard
+  review.ts       weekly review
+  routes.ts       API for the dashboard
+  scheduler.ts    grading every 30 min, Wednesday scan, Tuesday review
+web/src
+  pages/          Picks, Results, Scoreboard, Runs, Settings
+  components/     ProposalCard (execute / pass), UnitsChart
+```
+
+Data lives in `data/picks.db` (gitignored).
