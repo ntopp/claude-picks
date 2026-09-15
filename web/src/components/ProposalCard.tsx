@@ -38,7 +38,6 @@ export function ProposalCard({ p, tz, maxUnits, onChanged, readOnly }: { p: Prop
   const toast = useToast();
   const [units, setUnits] = useState<number>(p.units);
   const [note, setNote] = useState('');
-  const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const kickedOff = new Date(p.kickoff).getTime() < Date.now();
 
@@ -52,7 +51,6 @@ export function ProposalCard({ p, tz, maxUnits, onChanged, readOnly }: { p: Prop
       toast('err', (e as Error).message);
     } finally {
       setBusy(false);
-      setConfirm(false);
     }
   };
 
@@ -120,30 +118,19 @@ export function ProposalCard({ p, tz, maxUnits, onChanged, readOnly }: { p: Prop
         <div className="actions">
           {kickedOff ? (
             <span className="muted">Kicked off — this pick expires and will be graded for the engine only.</span>
-          ) : !confirm ? (
+          ) : (
             <>
               <label className="muted small">
                 units{' '}
                 <input type="number" min={0.5} max={maxUnits} step={0.5} value={units} onChange={(e) => setUnits(Number(e.target.value))} />
               </label>
               <input type="text" placeholder="note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
-              <button className="btn execute" disabled={busy} onClick={() => setConfirm(true)}>
-                Execute
+              {/* One click: paper bets are reversible with Undo until kickoff, so no confirm step. */}
+              <button className="btn execute" disabled={busy} onClick={() => act(() => api.execute(p.id, units, note || undefined), `Executed ${p.pick} for ${units}u`)}>
+                Execute {units}u
               </button>
               <button className="btn" disabled={busy} onClick={() => act(() => api.pass(p.id, note || undefined), `Passed on ${p.pick}`)}>
                 Pass
-              </button>
-            </>
-          ) : (
-            <>
-              <span>
-                Log <b>{units}u</b> on <b>{p.pick}</b>?
-              </span>
-              <button className="btn execute" disabled={busy} onClick={() => act(() => api.execute(p.id, units, note || undefined), `Executed ${p.pick} for ${units}u`)}>
-                Confirm
-              </button>
-              <button className="btn" disabled={busy} onClick={() => setConfirm(false)}>
-                Cancel
               </button>
             </>
           )}
