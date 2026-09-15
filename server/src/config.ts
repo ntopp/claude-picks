@@ -2,6 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
+import { execFileSync } from 'node:child_process';
 
 // Load the repo-root .env regardless of where the process was started from.
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -23,9 +24,28 @@ export const config = {
     topic: (process.env.NTFY_TOPIC ?? '').trim(),
     server: (process.env.NTFY_SERVER ?? 'https://ntfy.sh').replace(/\/$/, ''),
   },
+
+  /** Where a phone opens the dashboard; used as the tap-through link on pushes. Set DASHBOARD_URL or let Tailscale be detected. */
+  dashboardUrl: (process.env.DASHBOARD_URL ?? '').trim().replace(/\/$/, '') || detectDashboardUrl(),
+  webPort: Number(process.env.WEB_PORT ?? 5174),
 };
 
 export const hasAnthropicKey = () => !!config.anthropic.apiKey;
+
+/** Best effort: the machine's Tailscale IPv4 (100.x.y.z) if the CLI is installed, else localhost. */
+function detectDashboardUrl(): string {
+  const port = Number(process.env.WEB_PORT ?? 5174);
+  const candidates = process.platform === 'win32' ? ['tailscale', 'C:\\Program Files\\Tailscale\\tailscale.exe'] : ['tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale'];
+  for (const bin of candidates) {
+    try {
+      const ip = execFileSync(bin, ['ip', '-4'], { encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }).trim().split(/\s+/)[0];
+      if (/^100\.\d+\.\d+\.\d+$/.test(ip)) return `http://${ip}:${port}`;
+    } catch {
+      /* not installed or not running */
+    }
+  }
+  return `http://localhost:${port}`;
+}
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 

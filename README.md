@@ -34,12 +34,20 @@ Open http://localhost:5174. (`npm start` runs both with auto-restart; `npm run s
 
 Optional `.env` (copy `.env.example`): `ANTHROPIC_API_KEY` lets the app run scans itself from the Runs tab or on a Wednesday schedule. Without it, use the Claude Code session flow below. `NTFY_TOPIC` sends a push when picks are proposed or settled.
 
+## Phone
+
+The dashboard installs as an app (Add to Home Screen) and is laid out for a phone: big Execute / Pass buttons, one tap each, Undo until kickoff.
+
+1. **Reach the PC.** Install [Tailscale](https://tailscale.com) on the PC and the phone, sign in to the same account. The server prints the phone address on startup (`http://100.x.y.z:5174`); it is also what pushes link to. Without Tailscale, the LAN address Vite prints works on home Wi-Fi only, or set `DASHBOARD_URL` in `.env`.
+2. **Get pushes.** Install the [ntfy](https://ntfy.sh) app, subscribe to the topic in `.env` (`NTFY_TOPIC`, treat it like a password), then `npm run notify:test`. You get a push when picks are proposed and when bets settle; tapping opens the dashboard.
+3. **Install.** Open the address in the phone browser and choose Add to Home Screen.
+
 ## Weekly workflow
 
 | When | What |
 |---|---|
-| Tue–Wed | Lines are up. Run a scan (Runs tab) or the session flow. Proposals appear on the Picks tab. |
-| Wed–Sat | Execute or Pass each proposal, with a note if you like. Line movement since the pick is shown on the card. |
+| Thu 8:30 AM | Lines are up and Wednesday practice reports are in. A scheduled Claude Code task runs the session flow (packet → research → propose) and pushes the picks to your phone. Or run a scan yourself from the Runs tab. |
+| Thu–Sat | Execute or Pass each proposal, with a note if you like. Line movement since the pick is shown on the card. |
 | Thu–Mon | Games play; the server grades as they finish. Picks tab shows live scores on your open bets. |
 | Tue | Review is written. Read it before the next scan. |
 

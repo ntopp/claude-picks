@@ -15,6 +15,8 @@ When the user asks for picks / a slate / proposals from a session (no `ANTHROPIC
 5. `npm run propose -- --file data/response.json --kind weekly` (or `adhoc`). The rails drop anything invalid and print why.
 6. Tell the user what was proposed and why; they Execute or Pass from the dashboard. Never mark a proposal executed from a session — that is the user's action.
 
+A desktop scheduled task (`weekly-football-picks`, Thursdays 8:30 AM) runs exactly this flow unattended; `npm run propose` sends the ntfy push itself when `NTFY_TOPIC` is set.
+
 ## Grading and feedback
 
 - `npm run grade` refreshes scores for every week with an open pick, freezes closing lines at kickoff, and settles finals. The server does this every 30 minutes on its own.

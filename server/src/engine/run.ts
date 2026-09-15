@@ -115,6 +115,14 @@ export function insertProposals(runId: number | null, packet: Packet, inputs: Pr
   return { inserted, dropped };
 }
 
+/** One line per pick for the push notification body. */
+function pickList(ids: number[]): string {
+  return ids
+    .map((id) => db.prepare('SELECT matchup, pick, units, confidence FROM proposals WHERE id = ?').get(id) as { matchup: string; pick: string; units: number; confidence: number })
+    .map((p) => `${p.matchup}: ${p.pick} · ${p.units}u · conf ${p.confidence}`)
+    .join('\n');
+}
+
 /** Import a response produced by a Claude Code session. */
 export function recordSessionSlate(kind: RunKind, packet: Packet, response: SlateResponse) {
   expireStaleProposals();
@@ -122,7 +130,7 @@ export function recordSessionSlate(kind: RunKind, packet: Packet, response: Slat
   const result = insertProposals(runId, packet, response.proposals);
   finishRun(runId, { summary: response.week_summary, response_json: JSON.stringify({ ...response, dropped: result.dropped }) });
   logEvent('info', `Session slate: ${result.inserted.length} proposal(s) inserted, ${result.dropped.length} dropped`, result);
-  if (result.inserted.length) void notify(`${result.inserted.length} new pick(s) proposed`, response.week_summary.slice(0, 200));
+  if (result.inserted.length) void notify(`${result.inserted.length} new pick(s) to review`, pickList(result.inserted), { priority: 'high', tags: 'football,bell' });
   return { runId, ...result };
 }
 
@@ -164,7 +172,7 @@ export async function runApiScan(kind: RunKind, opts: { userNote?: string; leagu
       output_tokens: scan.usage.output,
     });
     logEvent('info', `API slate: ${result.inserted.length} proposal(s) inserted, ${result.dropped.length} dropped, ${scan.usage.searches} searches`, result);
-    if (result.inserted.length) void notify(`${result.inserted.length} new pick(s) proposed`, scan.parsed.week_summary.slice(0, 200));
+    if (result.inserted.length) void notify(`${result.inserted.length} new pick(s) to review`, pickList(result.inserted), { priority: 'high', tags: 'football,bell' });
     return { runId, ...result };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

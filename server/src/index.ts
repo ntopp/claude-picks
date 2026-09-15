@@ -42,6 +42,7 @@ try {
 app.listen(config.port, () => {
   console.log(`claude-picks server on http://localhost:${config.port}  (paper bets only)`);
   console.log(`  Anthropic key: ${hasAnthropicKey() ? 'configured (API engine available)' : 'not set (session engine only)'}`);
-  console.log(`  Notifications: ${notifyEnabled() ? 'ntfy on' : 'off (set NTFY_TOPIC)'}`);
+  console.log(`  Notifications: ${notifyEnabled() ? `ntfy on (topic ${config.ntfy.topic})` : 'off (set NTFY_TOPIC)'}`);
+  console.log(`  Phone / push link: ${config.dashboardUrl}${config.dashboardUrl.includes('localhost') ? '  (install Tailscale or set DASHBOARD_URL for a phone-reachable address)' : ''}`);
   startScheduler();
 });

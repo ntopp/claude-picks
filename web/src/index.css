@@ -149,3 +149,25 @@ pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px
 .winrate .bar { flex: 1; height: 10px; background: var(--bg-3); border-radius: 999px; position: relative; overflow: visible; }
 .winrate .bar .fill { height: 100%; border-radius: 999px; background: var(--accent); }
 .winrate .bar .be { position: absolute; top: -4px; width: 2px; height: 18px; background: var(--warn); }
+
+/* phone */
+@media (max-width: 700px) {
+  .topbar { padding: 8px 12px; gap: 8px; }
+  .topbar nav { order: 10; width: 100%; display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; }
+  .topbar nav button { padding: 8px 4px; font-size: 13px; }
+  .topbar .muted.small:last-child { display: none; }
+  .grid.cols-4 { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .card { padding: 12px; }
+  .stat .value { font-size: 20px; }
+  .proposal .pick { font-size: 17px; }
+  .proposal .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .proposal .actions label { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+  .proposal .actions input[type=number] { width: 80px; padding: 10px; font-size: 16px; }
+  .proposal .actions input[type=text] { grid-column: 1 / -1; padding: 10px; font-size: 16px; }
+  .proposal .actions .btn { padding: 14px 10px; font-size: 16px; }
+  .proposal .actions .btn.sm { padding: 10px; font-size: 14px; grid-column: 1 / -1; }
+  th, td { padding: 6px 5px; font-size: 13px; }
+}
+@supports (padding: env(safe-area-inset-top)) {
+  .topbar { padding-top: calc(8px + env(safe-area-inset-top)); }
+}

@@ -12,7 +12,8 @@
     "scan": "tsx scripts/scan.ts",
     "review": "tsx scripts/review.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "notify:test": "tsx scripts/notify-test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",

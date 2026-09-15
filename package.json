@@ -19,7 +19,8 @@
     "typecheck": "npm run typecheck --workspace=server && npm run typecheck --workspace=web",
     "test": "npm test --workspace=server",
     "start": "node scripts/start-all.mjs",
-    "stop": "node scripts/stop.mjs"
+    "stop": "node scripts/stop.mjs",
+    "notify:test": "npm run notify:test --workspace=server --"
   },
   "allowScripts": {
     "esbuild@0.28.2": true
