@@ -2,20 +2,24 @@ import cron from 'node-cron';
 import { config, hasAnthropicKey } from './config.js';
 import { db, getSettings, logEvent } from './db.js';
 import { runApiScan } from './engine/run.js';
-import { syncAndGrade } from './grading.js';
+import { gameInProgress, syncAndGrade } from './grading.js';
 import { buildReview } from './review.js';
 
 /**
- * Every 30 minutes: refresh any week that still has an ungraded pick (captures line moves,
- * freezes the closing line at kickoff, grades finals). Wednesday 10:00: weekly API scan if
- * enabled. Tuesday 08:00: weekly review once there is something to review.
+ * Every 5 minutes while one of our games is being played, otherwise every 30: refresh any week
+ * that still has an ungraded pick (captures line moves, freezes the closing line at kickoff,
+ * grades finals). Wednesday 10:00: weekly API scan if enabled. Tuesday 08:00: weekly review.
  */
 export function startScheduler() {
   const tz = config.displayTz;
 
+  // Each tick is one small ESPN scoreboard request per league with an open pick.
+  let lastSync = 0;
   cron.schedule(
-    '*/30 * * * *',
+    '*/5 * * * *',
     async () => {
+      if (!gameInProgress() && Date.now() - lastSync < 29 * 60_000) return;
+      lastSync = Date.now();
       try {
         const r = await syncAndGrade();
         if (r.graded) console.log(`[grade] refreshed ${r.refreshed} games, graded ${r.graded}`);

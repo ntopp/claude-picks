@@ -31,6 +31,21 @@ export async function syncAndGrade(): Promise<{ refreshed: number; graded: numbe
   return { refreshed, graded: gradePending() };
 }
 
+/**
+ * True while any ungraded pick's game is plausibly being played: ESPN says in_progress, or it
+ * kicked off within the last four hours and we have not yet seen a final.
+ */
+export function gameInProgress(): boolean {
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM proposals p JOIN games g ON g.id = p.game_id
+       WHERE p.graded_at IS NULL AND p.status != 'void'
+         AND (g.status = 'in_progress' OR (g.status = 'scheduled' AND p.kickoff <= ? AND p.kickoff >= ?))`,
+    )
+    .get(nowIso(), new Date(Date.now() - 4 * 3600_000).toISOString()) as { n: number };
+  return row.n > 0;
+}
+
 /** Grade every ungraded proposal whose game is final (or dead). Pure DB work; safe to call often. */
 export function gradePending(): number {
   const rows = db.prepare(`SELECT * FROM proposals WHERE graded_at IS NULL AND status != 'void'`).all() as ProposalRow[];
