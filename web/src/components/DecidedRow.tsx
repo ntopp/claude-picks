@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { fmtLine, fmtPrice, fmtTime, leagueLabel, type Proposal } from '../api';
+import { fmtLine, fmtPrice, fmtTime, fmtUnits, leagueLabel, signClass, type Proposal } from '../api';
 import { ProposalCard } from './ProposalCard';
 
 /** Where the picked side's number is now vs what we took, compactly. */
@@ -42,14 +42,24 @@ export function DecidedRow({ p, tz, maxUnits, onChanged }: { p: Proposal; tz: st
           )}
         </td>
         <td>
+          {p.result ? (
+            <>
+              <span className={`badge ${p.result}`}>{p.result}</span>{' '}
+              <b className={signClass(p.units_net)}>{fmtUnits(p.units_net)}</b>
+              {p.clv !== null ? <span className={`small ${signClass(p.clv)}`}> · CLV {p.clv > 0 ? '+' : ''}{p.clv.toFixed(1)}</span> : ''}
+            </>
+          ) : ''}
+        </td>
+        <td>
           <span className={`badge ${p.status}`}>{p.status}</span>
           {p.status === 'executed' ? <span className="muted small"> {p.executed_units ?? p.units}u</span> : ''}
+          {p.origin === 'lean' ? <span className="muted small"> lean</span> : ''}
         </td>
         <td className="muted small">{p.confidence}/10</td>
       </tr>
       {open && (
         <tr className="note-row">
-          <td colSpan={6} style={{ padding: '6px 0 10px' }}>
+          <td colSpan={7} style={{ padding: '6px 0 10px' }}>
             <ProposalCard p={p} tz={tz} maxUnits={maxUnits} onChanged={onChanged} />
           </td>
         </tr>

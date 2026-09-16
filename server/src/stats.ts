@@ -69,6 +69,7 @@ export type Scoreboard = {
   engine: Bucket;
   human: Bucket;
   passed: Bucket;
+  leans: Bucket;
   pending: number;
   humanEdge: { verdict: string; executedRoi: number | null; passedRoi: number | null };
   byLeague: Record<string, Bucket>;
@@ -84,15 +85,18 @@ export function computeScoreboard(): Scoreboard {
   const graded = db.prepare(`SELECT * FROM proposals WHERE graded_at IS NOT NULL AND status != 'void' ORDER BY kickoff ASC, id ASC`).all() as ProposalRow[];
   const pending = (db.prepare(`SELECT COUNT(*) AS n FROM proposals WHERE status = 'pending'`).get() as { n: number }).n;
 
-  const engine = graded.map(engineView);
+  // The engine is scored only on what it proposed as a pick; leans the user chose to bet are their own bucket.
+  const enginePicks = graded.filter((p) => p.origin !== 'lean');
+  const engine = enginePicks.map(engineView);
   const executed = graded.filter((p) => p.status === 'executed').map(humanView);
-  const passed = graded.filter((p) => p.status === 'passed').map(engineView);
+  const passed = enginePicks.filter((p) => p.status === 'passed').map(engineView);
+  const leans = graded.filter((p) => p.origin === 'lean').map(humanView);
 
   let engineCum = 0;
   let humanCum = 0;
   let peak = 0;
   const series = graded.map((p) => {
-    engineCum += p.units_net ?? 0;
+    if (p.origin !== 'lean') engineCum += p.units_net ?? 0;
     if (p.status === 'executed') humanCum += humanView(p).net;
     peak = Math.max(peak, humanCum);
     return { id: p.id, kickoff: p.kickoff, pick: `${p.matchup}: ${p.pick}`, result: p.result ?? '', executed: p.status === 'executed', engineCum: round(engineCum), humanCum: round(humanCum) };
@@ -127,6 +131,7 @@ export function computeScoreboard(): Scoreboard {
     engine: bucket(engine),
     human: humanB,
     passed: passedB,
+    leans: bucket(leans),
     pending,
     humanEdge: { verdict, executedRoi: humanB.roi, passedRoi: passedB.roi },
     byLeague: groupBy(engine, (p) => p.league),

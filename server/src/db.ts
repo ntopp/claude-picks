@@ -127,6 +127,14 @@ CREATE TABLE IF NOT EXISTS reviews (
 );
 `);
 
+// Additive migrations for databases created before these columns existed.
+for (const [table, column, ddl] of [
+  ['proposals', 'origin', "TEXT NOT NULL DEFAULT 'engine'"], // engine = proposed as a pick | lean = user executed a board lean
+] as const) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+}
+
 export const nowIso = () => new Date().toISOString();
 
 export function logEvent(level: 'info' | 'warn' | 'error', message: string, data?: unknown) {
@@ -215,6 +223,7 @@ export type ProposalRow = {
   key_factors_json: string | null;
   lines_at_proposal_json: string | null;
   status: 'pending' | 'executed' | 'passed' | 'expired' | 'void';
+  origin: 'engine' | 'lean';
   decided_at: string | null;
   decision_note: string | null;
   executed_units: number | null;

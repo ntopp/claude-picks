@@ -1,14 +1,15 @@
 import { Router } from 'express';
 import { config, hasAnthropicKey, LEAGUES, type League } from './config.js';
 import { db, expireStaleProposals, getGame, getProposal, getSettings, listProposals, logEvent, nowIso, updateSettings, type GameRow, type ProposalRow } from './db.js';
-import { upcomingWeek } from './espn.js';
+import { scoreboard, upcomingWeek } from './espn.js';
 import { runApiScan } from './engine/run.js';
 import { syncAndGrade } from './grading.js';
 import { notifyEnabled } from './notify.js';
 import { buildPacket, renderPacketMarkdown } from './slate.js';
 import { computeScoreboard } from './stats.js';
 import { buildReview } from './review.js';
-import { pickedFrom, type Lines } from './odds.js';
+import { pickedFrom, pickLabel, type Lines } from './odds.js';
+import type { Market, Side } from './engine/schema.js';
 
 export const api = Router();
 
@@ -109,31 +110,27 @@ api.post('/proposals/:id/undo', (req, res) => {
   if (!p) return res.status(404).json({ error: 'No such proposal' });
   if (p.status !== 'executed' && p.status !== 'passed') return res.status(400).json({ error: `Proposal is ${p.status}` });
   if (new Date(p.kickoff).getTime() < Date.now()) return res.status(400).json({ error: 'Game already kicked off' });
-  db.prepare(`UPDATE proposals SET status = 'pending', executed_units = NULL, decided_at = NULL, decision_note = NULL WHERE id = ?`).run(p.id);
+  // A lean bet was never an engine proposal: undoing it removes it entirely and the game returns to the board.
+  if (p.origin === 'lean') db.prepare('DELETE FROM proposals WHERE id = ?').run(p.id);
+  else db.prepare(`UPDATE proposals SET status = 'pending', executed_units = NULL, decided_at = NULL, decision_note = NULL WHERE id = ?`).run(p.id);
   res.json({ ok: true });
 });
 
 api.get('/scoreboard', (_req, res) => res.json(computeScoreboard()));
 
-/** This week's board for one league: every game with lines, score, the engine's view, and any pick on it. */
-api.get('/slate', async (req, res) => {
-  const league = (req.query.league === 'cfb' ? 'cfb' : 'nfl') as League;
-  const weeks = await upcomingWeeks();
-  const target =
-    weeks[league] ??
-    (db.prepare('SELECT season, week FROM games WHERE league = ? ORDER BY season DESC, week DESC LIMIT 1').get(league) as { season: number; week: number } | undefined);
-  if (!target) return res.json({ league, season: null, week: null, games: [] });
+/** One league-week for the board: every game with lines, score, the engine's view, and any pick on it. */
+function slateFor(league: League, season: number, week: number) {
   const rows = db
     .prepare(
       `SELECT g.*, v.lean, v.confidence AS view_confidence, v.note AS view_note, v.updated_at AS view_at,
-              p.id AS proposal_id, p.pick AS proposal_pick, p.status AS proposal_status, p.confidence AS proposal_confidence, p.result AS proposal_result
+              p.id AS proposal_id, p.pick AS proposal_pick, p.status AS proposal_status, p.confidence AS proposal_confidence, p.result AS proposal_result, p.origin AS proposal_origin
        FROM games g
        LEFT JOIN game_views v ON v.game_id = g.id
        LEFT JOIN proposals p ON p.game_id = g.id AND p.status != 'void'
        WHERE g.league = ? AND g.season = ? AND g.week = ?
        ORDER BY g.kickoff, g.id`,
     )
-    .all(league, target.season, target.week) as (GameRow & {
+    .all(league, season, week) as (GameRow & {
     lean: string | null;
     view_confidence: number | null;
     view_note: string | null;
@@ -143,11 +140,12 @@ api.get('/slate', async (req, res) => {
     proposal_status: string | null;
     proposal_confidence: number | null;
     proposal_result: string | null;
+    proposal_origin: string | null;
   })[];
-  res.json({
+  return {
     league,
-    season: target.season,
-    week: target.week,
+    season,
+    week,
     games: rows.map((g) => ({
       id: g.id,
       kickoff: g.kickoff,
@@ -159,10 +157,225 @@ api.get('/slate', async (req, res) => {
       lines: g.lines_json ? (JSON.parse(g.lines_json) as Lines) : null,
       open: g.lines_open_json ? (JSON.parse(g.lines_open_json) as Lines) : null,
       view: g.lean ? { lean: g.lean, confidence: g.view_confidence, note: g.view_note, at: g.view_at } : null,
-      proposal: g.proposal_id ? { id: g.proposal_id, pick: g.proposal_pick, status: g.proposal_status, confidence: g.proposal_confidence, result: g.proposal_result } : null,
+      proposal: g.proposal_id
+        ? { id: g.proposal_id, pick: g.proposal_pick, status: g.proposal_status, confidence: g.proposal_confidence, result: g.proposal_result, origin: g.proposal_origin }
+        : null,
     })),
-  });
+  };
+}
+
+api.get('/slate', async (req, res) => {
+  const league = (req.query.league === 'cfb' ? 'cfb' : 'nfl') as League;
+  const weeks = await upcomingWeeks();
+  const target =
+    weeks[league] ??
+    (db.prepare('SELECT season, week FROM games WHERE league = ? ORDER BY season DESC, week DESC LIMIT 1').get(league) as { season: number; week: number } | undefined);
+  if (!target) return res.json({ league, season: null, week: null, games: [] });
+  res.json(slateFor(league, target.season, target.week));
 });
+
+// ---- weeks ----------------------------------------------------------------
+// An experiment week is an NFL week (Wed -> Tue per ESPN's calendar); the college week whose games fall
+// inside that window rides along (CFB week 3 with NFL week 2 in 2026). College-only weeks before the
+// NFL starts get their own tab.
+
+let calendarCache: { at: number; value: { week: number; start: string; end: string }[] } | null = null;
+async function nflCalendar() {
+  if (calendarCache && Date.now() - calendarCache.at < 6 * 3600_000) return calendarCache.value;
+  try {
+    const sb = await scoreboard('nfl');
+    calendarCache = { at: Date.now(), value: sb.weeks };
+  } catch {
+    calendarCache = calendarCache ?? { at: 0, value: [] };
+  }
+  return calendarCache.value;
+}
+
+export type WeekTab = {
+  key: string; // "2026-w02" or "2026-c01"
+  label: string;
+  sublabel: string;
+  season: number;
+  nfl: { season: number; week: number } | null;
+  cfb: { season: number; week: number } | null;
+  start: string;
+  end: string;
+  current: boolean;
+  picks: number;
+  pending: number;
+};
+
+async function weekTabs(): Promise<WeekTab[]> {
+  const cal = await nflCalendar();
+  const upcoming = await upcomingWeeks();
+  const rows = db
+    .prepare('SELECT league, season, week, MIN(kickoff) AS first, MAX(kickoff) AS last FROM games GROUP BY league, season, week ORDER BY season, first')
+    .all() as { league: League; season: number; week: number; first: string; last: string }[];
+  const tabs = new Map<string, WeekTab>();
+  const pad = (w: number) => String(w).padStart(2, '0');
+  for (const r of rows.filter((r) => r.league === 'nfl')) {
+    const win = cal.find((c) => c.week === r.week);
+    const key = `${r.season}-w${pad(r.week)}`;
+    tabs.set(key, {
+      key,
+      label: `Week ${r.week}`,
+      sublabel: `NFL ${r.week}`,
+      season: r.season,
+      nfl: { season: r.season, week: r.week },
+      cfb: null,
+      start: win?.start ?? r.first,
+      end: win?.end ?? r.last,
+      current: upcoming.nfl?.week === r.week && upcoming.nfl?.season === r.season,
+      picks: 0,
+      pending: 0,
+    });
+  }
+  for (const r of rows.filter((r) => r.league === 'cfb')) {
+    // Attach to the NFL week whose window contains the college week's first kickoff.
+    const host = [...tabs.values()].find((t) => t.nfl && r.first >= t.start && r.first < t.end);
+    if (host) {
+      host.cfb = { season: r.season, week: r.week };
+      host.sublabel = `NFL ${host.nfl!.week} · CFB ${r.week}`;
+    } else {
+      const key = `${r.season}-c${pad(r.week)}`;
+      tabs.set(key, {
+        key,
+        label: `CFB wk ${r.week}`,
+        sublabel: `CFB ${r.week}`,
+        season: r.season,
+        nfl: null,
+        cfb: { season: r.season, week: r.week },
+        start: r.first,
+        end: r.last,
+        current: !upcoming.nfl && upcoming.cfb?.week === r.week && upcoming.cfb?.season === r.season,
+        picks: 0,
+        pending: 0,
+      });
+    }
+  }
+  const counts = db
+    .prepare(`SELECT league, season, week, COUNT(*) AS n, SUM(status = 'pending') AS pending FROM proposals WHERE status != 'void' GROUP BY league, season, week`)
+    .all() as { league: League; season: number; week: number; n: number; pending: number }[];
+  for (const t of tabs.values()) {
+    for (const c of counts) {
+      const match = (t.nfl && c.league === 'nfl' && c.season === t.nfl.season && c.week === t.nfl.week) || (t.cfb && c.league === 'cfb' && c.season === t.cfb.season && c.week === t.cfb.week);
+      if (match) {
+        t.picks += c.n;
+        t.pending += c.pending;
+      }
+    }
+  }
+  // Weeks that came and went with no picks (e.g. before the experiment started) are noise; keep current and future ones.
+  const now = nowIso();
+  const list = [...tabs.values()].filter((t) => t.picks > 0 || t.current || t.start > now).sort((a, b) => a.start.localeCompare(b.start));
+  if (!list.some((t) => t.current) && list.length) list[list.length - 1].current = true;
+  return list;
+}
+
+api.get('/weeks', async (_req, res, next) => {
+  try {
+    res.json(await weekTabs());
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** Everything for one week tab: picks by status and both boards. */
+api.get('/week/:key', async (req, res, next) => {
+  try {
+    expireStaleProposals();
+    const tab = (await weekTabs()).find((t) => t.key === req.params.key);
+    if (!tab) return res.status(404).json({ error: 'No such week' });
+    const clauses: string[] = [];
+    const params: (string | number)[] = [];
+    if (tab.nfl) {
+      clauses.push('(league = ? AND season = ? AND week = ?)');
+      params.push('nfl', tab.nfl.season, tab.nfl.week);
+    }
+    if (tab.cfb) {
+      clauses.push('(league = ? AND season = ? AND week = ?)');
+      params.push('cfb', tab.cfb.season, tab.cfb.week);
+    }
+    const all = (db.prepare(`SELECT * FROM proposals WHERE status != 'void' AND (${clauses.join(' OR ')}) ORDER BY kickoff, id`).all(...params) as ProposalRow[]).map(withGame);
+    res.json({
+      tab,
+      pending: all.filter((p) => p.status === 'pending'),
+      open: all.filter((p) => p.status === 'executed' && !p.graded_at),
+      passed: all.filter((p) => p.status === 'passed' && !p.graded_at),
+      settled: all.filter((p) => !!p.graded_at).sort((a, b) => b.kickoff.localeCompare(a.kickoff)),
+      slates: {
+        nfl: tab.nfl ? slateFor('nfl', tab.nfl.season, tab.nfl.week) : null,
+        cfb: tab.cfb ? slateFor('cfb', tab.cfb.season, tab.cfb.week) : null,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * Bet a board lean yourself. Parses the engine's lean ("BUF -4.5", "Under 53.5", "DET ML") into a
+ * market/side and logs it at the CURRENT line and price, tagged origin=lean so the engine is not
+ * scored on it.
+ */
+api.post('/board/:gameId/execute', (req, res) => {
+  const g = getGame(req.params.gameId);
+  if (!g) return res.status(404).json({ error: 'No such game' });
+  if (g.status !== 'scheduled' || new Date(g.kickoff).getTime() < Date.now()) return res.status(400).json({ error: 'Game already kicked off' });
+  const view = db.prepare('SELECT * FROM game_views WHERE game_id = ?').get(g.id) as { run_id: number | null; lean: string; confidence: number; note: string } | undefined;
+  if (!view) return res.status(400).json({ error: 'No lean on this game' });
+  if (db.prepare(`SELECT id FROM proposals WHERE game_id = ? AND status != 'void'`).get(g.id)) return res.status(400).json({ error: 'There is already a pick on this game' });
+  const lines: Lines | null = g.lines_json ? (JSON.parse(g.lines_json) as Lines) : null;
+  if (!lines) return res.status(400).json({ error: 'No current line for this game' });
+  const parsed = parseLean(view.lean, g);
+  if (!parsed) return res.status(400).json({ error: `Cannot turn "${view.lean}" into a bet` });
+  const cur = pickedFrom(lines, parsed.market, parsed.side);
+  if (parsed.market !== 'moneyline' && cur.line === null) return res.status(400).json({ error: 'No current line for that market' });
+  const price = cur.price ?? -110;
+  const s = getSettings();
+  const body = (req.body ?? {}) as { units?: number; note?: string };
+  const units = Number(body.units ?? s.defaultUnits);
+  if (!Number.isFinite(units) || units <= 0) return res.status(400).json({ error: 'units must be positive' });
+  if (units > s.maxUnitsPerBet) return res.status(400).json({ error: `units above the ${s.maxUnitsPerBet}u cap (change it in Settings)` });
+  const label = pickLabel(parsed.market, parsed.side, cur.line, price, g.home_abbr, g.away_abbr);
+  const r = db
+    .prepare(
+      `INSERT INTO proposals (run_id, created_at, expires_at, game_id, league, season, week, kickoff, matchup, market, side, pick, line, price, units, confidence, edge_type, thesis, bear_case, key_factors_json, lines_at_proposal_json, status, origin, decided_at, decision_note, executed_units)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'other', ?, ?, '[]', ?, 'executed', 'lean', ?, ?, ?)`,
+    )
+    .run(
+      view.run_id, nowIso(), g.kickoff, g.id, g.league, g.season, g.week, g.kickoff, g.name,
+      parsed.market, parsed.side, label, cur.line, price, units, view.confidence,
+      view.note || 'Board lean taken by the user.', 'User-executed board lean; the engine did not propose this as a pick.',
+      JSON.stringify(lines), nowIso(), body.note ?? null, units,
+    );
+  logEvent('info', `Executed board lean ${g.name}: ${label} for ${units}u`);
+  res.json({ ok: true, id: Number(r.lastInsertRowid), pick: label });
+});
+
+function parseLean(lean: string, g: GameRow): { market: Market; side: Side } | null {
+  const t = lean.trim();
+  let m = /^(over|under)\s+[\d.]+$/i.exec(t);
+  if (m) return { market: 'total', side: m[1].toLowerCase() as Side };
+  m = /^([A-Za-z&\-'.]+)\s+ML$/i.exec(t);
+  if (m) {
+    const side = teamSide(m[1], g);
+    return side ? { market: 'moneyline', side } : null;
+  }
+  m = /^([A-Za-z&\-'.]+)\s+([+-]?[\d.]+|PK)$/i.exec(t);
+  if (m) {
+    const side = teamSide(m[1], g);
+    return side ? { market: 'spread', side } : null;
+  }
+  return null;
+}
+
+function teamSide(abbr: string, g: GameRow): 'home' | 'away' | null {
+  const a = abbr.toUpperCase();
+  if (a === g.home_abbr.toUpperCase()) return 'home';
+  if (a === g.away_abbr.toUpperCase()) return 'away';
+  return null;
+}
 
 api.get('/games', (req, res) => {
   const league = String(req.query.league ?? 'nfl');

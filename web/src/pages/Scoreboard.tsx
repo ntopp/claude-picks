@@ -135,6 +135,11 @@ export function ScoreboardPage() {
         <p style={{ margin: 0 }}>{sb.humanEdge.verdict}</p>
         <p className="muted small" style={{ margin: '6px 0 0' }}>
           Executed ROI {fmtSignedPct(sb.humanEdge.executedRoi)} · Passed ROI {fmtSignedPct(sb.humanEdge.passedRoi)} ({sb.passed.n} passed picks graded as if bet at the proposed stake)
+          {sb.leans.n > 0 && (
+            <>
+              {' '}· Board leans you bet yourself: {sb.leans.wins}-{sb.leans.losses}-{sb.leans.pushes}, {fmtUnits(sb.leans.net)} (ROI {fmtSignedPct(sb.leans.roi)}) — not counted against the engine.
+            </>
+          )}
         </p>
       </div>
 

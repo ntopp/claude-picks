@@ -26,6 +26,7 @@ A desktop scheduled task (`weekly-football-picks`, Thursdays 8:30 AM) runs exact
 ## Conventions
 
 - `Lines` snapshots (`server/src/odds.ts`) are always from the home team's perspective (`spreadHome`); proposals store the picked side's line. `pickedFrom()` converts.
+- Proposals carry `origin`: `engine` (proposed as a pick) or `lean` (the user bet a board lean from the dashboard). The engine is scored only on `engine`; leans get their own bucket.
 - Rails live in `DEFAULT_SETTINGS` (`server/src/config.ts`) and are enforced in `insertProposals` (`server/src/engine/run.ts`).
 - Keep the `PLAYBOOK` system prompt stable; it is prompt-cached. Put per-scan context in the user message.
 - ESPN endpoints are unofficial; if the shape changes, `server/src/espn.ts` is the only file that reads raw JSON.

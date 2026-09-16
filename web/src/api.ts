@@ -47,6 +47,7 @@ export type Proposal = {
   bear_case: string;
   key_factors: string[];
   status: 'pending' | 'executed' | 'passed' | 'expired' | 'void';
+  origin: 'engine' | 'lean';
   decided_at: string | null;
   decision_note: string | null;
   executed_units: number | null;
@@ -93,6 +94,7 @@ export type Scoreboard = {
   engine: Bucket;
   human: Bucket;
   passed: Bucket;
+  leans: Bucket;
   pending: number;
   humanEdge: { verdict: string; executedRoi: number | null; passedRoi: number | null };
   byLeague: Record<string, Bucket>;
@@ -162,9 +164,31 @@ export type SlateGame = {
   lines: Lines | null;
   open: Lines | null;
   view: { lean: string; confidence: number | null; note: string | null; at: string | null } | null;
-  proposal: { id: number; pick: string; status: string; confidence: number; result: string | null } | null;
+  proposal: { id: number; pick: string; status: string; confidence: number; result: string | null; origin: string | null } | null;
 };
 export type Slate = { league: League; season: number | null; week: number | null; games: SlateGame[] };
+
+export type WeekTab = {
+  key: string;
+  label: string;
+  sublabel: string;
+  season: number;
+  nfl: { season: number; week: number } | null;
+  cfb: { season: number; week: number } | null;
+  start: string;
+  end: string;
+  current: boolean;
+  picks: number;
+  pending: number;
+};
+export type WeekData = {
+  tab: WeekTab;
+  pending: Proposal[];
+  open: Proposal[];
+  passed: Proposal[];
+  settled: Proposal[];
+  slates: { nfl: Slate | null; cfb: Slate | null };
+};
 
 export type ReviewRow = { id: number; created_at: string; label: string; report_md: string; narrative: string | null };
 
@@ -203,6 +227,9 @@ export const api = {
   undo: (id: number) => call<{ ok: boolean }>(`/proposals/${id}/undo`, { method: 'POST' }),
   scoreboard: () => call<Scoreboard>('/scoreboard'),
   slate: (league: League) => call<Slate>(`/slate?league=${league}`),
+  weeks: () => call<WeekTab[]>('/weeks'),
+  week: (key: string) => call<WeekData>(`/week/${key}`),
+  executeLean: (gameId: string, units: number, note?: string) => call<{ ok: boolean; id: number; pick: string }>(`/board/${gameId}/execute`, { method: 'POST', body: JSON.stringify({ units, note }) }),
   runs: () => call<Run[]>('/runs'),
   run: (id: number) => call<RunDetail>(`/runs/${id}`),
   scan: (note?: string, leagues?: League[]) => call<{ started: boolean }>('/scan', { method: 'POST', body: JSON.stringify({ note, leagues }) }),
