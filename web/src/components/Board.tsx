@@ -13,16 +13,17 @@ function spreadLabel(g: SlateGame): string {
 
 const team = (t: SlateGame['home']) => `${t.rank ? `#${t.rank} ` : ''}${t.abbr}`;
 
-/** What the lean would be logged at right now: the picked side's current line and price. */
-function leanNow(lean: string, g: SlateGame): string | null {
+/** What the lean would be logged at right now (the picked side's current line and price) and its bet-slip link. */
+function leanNow(lean: string, g: SlateGame): { label: string; link: string | null } | null {
   const l: Lines | null = g.lines;
+  const k = g.links;
   if (!l) return null;
   const t = lean.trim();
   let m = /^(over|under)\s+[\d.]+$/i.exec(t);
   if (m) {
     if (l.total === null) return null;
     const over = m[1].toLowerCase() === 'over';
-    return `${over ? 'Over' : 'Under'} ${l.total} (${fmtPrice(over ? l.overPrice : l.underPrice)})`;
+    return { label: `${over ? 'Over' : 'Under'} ${l.total} (${fmtPrice(over ? l.overPrice : l.underPrice)})`, link: over ? (k?.over ?? null) : (k?.under ?? null) };
   }
   m = /^([A-Za-z&\-'.]+)\s+(ML|[+-]?[\d.]+|PK)$/i.exec(t);
   if (!m) return null;
@@ -31,11 +32,11 @@ function leanNow(lean: string, g: SlateGame): string | null {
   if (!side) return null;
   if (m[2].toUpperCase() === 'ML') {
     const p = side === 'home' ? l.mlHome : l.mlAway;
-    return p === null ? null : `${abbr} ML ${fmtPrice(p)}`;
+    return p === null ? null : { label: `${abbr} ML ${fmtPrice(p)}`, link: side === 'home' ? (k?.mlHome ?? null) : (k?.mlAway ?? null) };
   }
   if (l.spreadHome === null) return null;
   const line = side === 'home' ? l.spreadHome : -l.spreadHome;
-  return `${abbr} ${fmtLine(line)} (${fmtPrice(side === 'home' ? l.spreadHomePrice : l.spreadAwayPrice)})`;
+  return { label: `${abbr} ${fmtLine(line)} (${fmtPrice(side === 'home' ? l.spreadHomePrice : l.spreadAwayPrice)})`, link: side === 'home' ? (k?.spreadHome ?? null) : (k?.spreadAway ?? null) };
 }
 
 /** One league-week board: every game with the engine's lean and confidence; tap a row for the note and to bet the lean. */
@@ -157,7 +158,7 @@ export function Board({ slates, tz, maxUnits, defaultUnits, onChanged }: { slate
                             {canBet && (
                               <div className="actions lean-actions" onClick={(e) => e.stopPropagation()}>
                                 <span className="small">
-                                  Bet the lean at today's number: <b>{now ?? 'no current line'}</b>
+                                  Bet the lean at today's number: <b>{now?.label ?? 'no current line'}</b>
                                 </span>
                                 <label className="muted small">
                                   units{' '}
@@ -166,6 +167,11 @@ export function Board({ slates, tz, maxUnits, defaultUnits, onChanged }: { slate
                                 <button className="btn execute sm" disabled={busy || !now} onClick={() => bet(g)}>
                                   Execute {units}u
                                 </button>
+                                {now?.link && (
+                                  <a className="btn sm book" href={now.link} target="_blank" rel="noopener noreferrer">
+                                    DraftKings ↗
+                                  </a>
+                                )}
                               </div>
                             )}
                           </td>

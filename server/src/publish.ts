@@ -8,7 +8,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { config, LEAGUE_LABEL } from './config.js';
 import { logEvent } from './db.js';
-import { fmtLine, fmtPrice } from './odds.js';
+import { betLinkFor, fmtLine, fmtPrice } from './odds.js';
 import { computeScoreboard, type Bucket } from './stats.js';
 import { weekDetail, weekTabs, type SlateGame, type WeekDetail } from './weeks.js';
 import { notifyFriends } from './notify.js';
@@ -38,7 +38,7 @@ details{margin:8px 0}summary{cursor:pointer;font-weight:600}details.week>summary
 .seg{display:inline-flex;border:1px solid var(--bd);border-radius:8px;overflow:hidden;margin-bottom:8px}.seg label{padding:5px 12px;font-size:13px;color:var(--mu);cursor:pointer}
 .tabs input{display:none}.tabs .panel{display:none}.tabs input:nth-of-type(1):checked~.seg label:nth-of-type(1),.tabs input:nth-of-type(2):checked~.seg label:nth-of-type(2){background:var(--bg3);color:var(--tx);font-weight:600}
 .tabs input:nth-of-type(1):checked~.panel:nth-of-type(1),.tabs input:nth-of-type(2):checked~.panel:nth-of-type(2){display:block}
-.note{white-space:normal;color:var(--mu);font-size:13px}footer{margin-top:24px;color:var(--mu);font-size:12.5px}
+.note{white-space:normal;color:var(--mu);font-size:13px}a.book{color:var(--ac);font-weight:600;text-decoration:none;border:1px solid var(--bd);border-radius:6px;padding:2px 8px;white-space:nowrap}footer{margin-top:24px;color:var(--mu);font-size:12.5px}
 `;
 
 const confBar = (n: number) => `<span class="conf">${Array.from({ length: 10 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
@@ -57,6 +57,7 @@ function pickHtml(p: WeekDetail['open'][number]) {
   <div class="muted small">${when(p.kickoff)} · ${p.units}u · ${esc(p.edge_type.replace('_', ' '))}${score ? ` · <b>${score}</b>` : ''}${p.clv !== null ? ` · CLV <b class="${sign(p.clv)}">${p.clv > 0 ? '+' : ''}${p.clv.toFixed(1)}</b>` : ''}</div>
   <p style="margin:8px 0 0">${esc(p.thesis)}</p>
   <div class="bear"><b>Bear case:</b> ${esc(p.bear_case)}</div>
+  ${p.betLink && g && g.status === 'scheduled' && new Date(p.kickoff).getTime() > Date.now() ? `<p class="small" style="margin:8px 0 0"><a class="book" href="${esc(p.betLink)}" target="_blank" rel="noopener noreferrer">Open bet slip at DraftKings ↗</a> <span class="muted">— opens the book with this side selected; the number there may differ.</span></p>` : ''}
 </div>`;
 }
 
@@ -75,10 +76,24 @@ function boardHtml(games: SlateGame[]) {
       const fin = g.status === 'final' || g.status === 'in_progress';
       const sc = fin && g.home.score !== null ? ` <span class="muted">${g.away.score}–${g.home.score}</span>` : '';
       const pick = g.proposal ? `<span class="badge ${g.proposal.result ?? g.proposal.status}">${g.proposal.result ?? g.proposal.status}</span> <span class="small">${esc(g.proposal.pick)}</span>` : '';
-      const note = g.view?.note ? `<tr><td colspan="7" class="note">${esc(g.view.note)}</td></tr>` : '';
+      const leanLink = g.view && g.status === 'scheduled' && new Date(g.kickoff).getTime() > Date.now() ? leanBetLink(g.view.lean, g) : null;
+      const note = g.view?.note || leanLink ? `<tr><td colspan="7" class="note">${esc(g.view?.note ?? '')}${leanLink ? ` <a class="book" href="${esc(leanLink)}" target="_blank" rel="noopener noreferrer">DraftKings ↗</a>` : ''}</td></tr>` : '';
       return `<tr class="${g.proposal ? 'has-pick' : ''}"><td class="muted">${g.status === 'final' ? 'Final' : g.status === 'in_progress' ? 'Live' : when(g.kickoff)}</td><td>${team(g.away)} ${g.neutral ? 'vs' : '@'} ${team(g.home)}${sc}</td><td class="mono">${spread(g)}</td><td class="mono">${g.lines?.total ?? '–'}</td><td>${esc(g.view?.lean ?? '–')}</td><td>${g.view ? `${confBar(g.view.confidence ?? 0)} <span class="muted small">${g.view.confidence}</span>` : '–'}</td><td>${pick}</td></tr>${note}`;
     })
     .join('')}</tbody></table></div>`;
+}
+
+/** The bet-slip link for a board lean like "BUF -4.5" / "Under 53.5" / "DET ML". */
+function leanBetLink(lean: string, g: SlateGame): string | null {
+  const t = lean.trim();
+  let m = /^(over|under)\s+[\d.]+$/i.exec(t);
+  if (m) return betLinkFor(g.links, 'total', m[1].toLowerCase() as 'over' | 'under');
+  m = /^([A-Za-z&\-'.]+)\s+(ML|[+-]?[\d.]+|PK)$/i.exec(t);
+  if (!m) return null;
+  const abbr = m[1].toUpperCase();
+  const side = abbr === g.home.abbr.toUpperCase() ? 'home' : abbr === g.away.abbr.toUpperCase() ? 'away' : null;
+  if (!side) return null;
+  return betLinkFor(g.links, m[2].toUpperCase() === 'ML' ? 'moneyline' : 'spread', side);
 }
 
 function weekHtml(d: WeekDetail, open: boolean) {

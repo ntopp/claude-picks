@@ -33,7 +33,7 @@ type RawCompetitor = {
   curatedRank?: { current?: number };
   records?: { type: string; summary: string }[];
 };
-type RawPrice = { line?: string; odds?: string };
+type RawPrice = { line?: string; odds?: string; link?: { href?: string } };
 type RawOdds = {
   provider: { name: string };
   details?: string;
@@ -91,7 +91,35 @@ export type ScoreboardGame = {
   away: { id: string; abbr: string; name: string; record: string; rank: number | null; score: number | null };
   lines: Lines | null;
   open: Lines | null;
+  links: BetLinks | null;
 };
+
+/** Sportsbook bet-slip deep links per side (DraftKings via ESPN). The user places the bet; we only link. */
+export type BetLinks = { provider: string; spreadHome: string | null; spreadAway: string | null; over: string | null; under: string | null; mlHome: string | null; mlAway: string | null };
+
+/** ESPN wraps the book URL in a tracking gateway; the real bet-slip URL is the `preurl` parameter. */
+function cleanLink(p: RawPrice | undefined): string | null {
+  const href = p?.link?.href;
+  if (!href) return null;
+  const m = /[?&]preurl=([^&]+)/.exec(href);
+  const url = m ? decodeURIComponent(m[1]) : href;
+  // Only ever link to a real book domain, never to whatever a feed happens to contain.
+  return /^https:\/\/[a-z0-9.-]+\.(draftkings|fanduel|betmgm|caesars)\.com\//i.test(url) ? url : null;
+}
+
+function parseLinks(o: RawOdds | undefined): BetLinks | null {
+  if (!o) return null;
+  const links: BetLinks = {
+    provider: o.provider?.name ?? 'unknown',
+    spreadHome: cleanLink(o.pointSpread?.home?.close),
+    spreadAway: cleanLink(o.pointSpread?.away?.close),
+    over: cleanLink(o.total?.over?.close),
+    under: cleanLink(o.total?.under?.close),
+    mlHome: cleanLink(o.moneyline?.home?.close),
+    mlAway: cleanLink(o.moneyline?.away?.close),
+  };
+  return Object.values(links).some((v) => v && v.startsWith('http')) ? links : null;
+}
 
 const num = (s: string | number | undefined | null): number | null => {
   if (s === undefined || s === null || s === '') return null;
@@ -157,6 +185,7 @@ function normalize(league: League, e: RawEvent): ScoreboardGame | null {
     away: { id: away.team.id, abbr: away.team.abbreviation, name: away.team.displayName, record: record(away), rank: rank(away), score: num(away.score) },
     lines: parseLines(primary, 'close'),
     open: parseLines(primary, 'open'),
+    links: parseLinks(primary),
   };
 }
 

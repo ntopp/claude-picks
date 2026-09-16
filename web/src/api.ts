@@ -71,6 +71,7 @@ export type Proposal = {
   } | null;
   currentLine: number | null;
   currentPrice: number | null;
+  betLink: string | null;
 };
 
 export type Bucket = {
@@ -153,6 +154,8 @@ export type Lines = {
   mlAway: number | null;
 };
 
+export type BetLinks = { provider: string; spreadHome: string | null; spreadAway: string | null; over: string | null; under: string | null; mlHome: string | null; mlAway: string | null };
+
 export type SlateGame = {
   id: string;
   kickoff: string;
@@ -163,6 +166,7 @@ export type SlateGame = {
   status: string;
   lines: Lines | null;
   open: Lines | null;
+  links: BetLinks | null;
   view: { lean: string; confidence: number | null; note: string | null; at: string | null } | null;
   proposal: { id: number; pick: string; status: string; confidence: number; result: string | null; origin: string | null } | null;
 };

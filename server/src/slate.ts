@@ -56,6 +56,7 @@ export function upsertGame(g: ScoreboardGame) {
     g.home.id, g.home.abbr, g.home.name, g.home.rank, g.away.id, g.away.abbr, g.away.name, g.away.rank,
     g.neutral ? 1 : 0, g.status, g.home.score, g.away.score, openJson, linesJson, closing, g.lines ? nowIso() : null, nowIso(),
   );
+  if (g.links) db.prepare('UPDATE games SET links_json = ? WHERE id = ?').run(JSON.stringify(g.links), g.id);
   // Keep the history: one row each time the number changes while the game is still open.
   if (!started && linesJson && linesJson !== existing?.lines_json) {
     db.prepare('INSERT INTO line_snapshots (game_id, ts, lines_json) VALUES (?, ?, ?)').run(g.id, nowIso(), linesJson);

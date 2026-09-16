@@ -88,6 +88,14 @@ export function closingLineValue(market: Market, side: Side, line: number | null
   return (impliedProb(c.price) - impliedProb(price)) * 100;
 }
 
+/** The bet-slip link for the picked side, if the book gave us one. */
+export function betLinkFor(links: { spreadHome: string | null; spreadAway: string | null; over: string | null; under: string | null; mlHome: string | null; mlAway: string | null } | null, market: Market, side: Side): string | null {
+  if (!links) return null;
+  if (market === 'spread') return side === 'home' ? links.spreadHome : links.spreadAway;
+  if (market === 'total') return side === 'over' ? links.over : links.under;
+  return side === 'home' ? links.mlHome : links.mlAway;
+}
+
 /** Human label for a pick: "BUF -4.5 (-110)", "Over 53.5 (-110)", "DET ML +180". */
 export function pickLabel(market: Market, side: Side, line: number | null, price: number, homeAbbr: string, awayAbbr: string): string {
   const team = side === 'home' ? homeAbbr : awayAbbr;

@@ -130,6 +130,7 @@ CREATE TABLE IF NOT EXISTS reviews (
 // Additive migrations for databases created before these columns existed.
 for (const [table, column, ddl] of [
   ['proposals', 'origin', "TEXT NOT NULL DEFAULT 'engine'"], // engine = proposed as a pick | lean = user executed a board lean
+  ['games', 'links_json', 'TEXT'], // sportsbook bet-slip deep links per side, refreshed on every sync
 ] as const) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
   if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
@@ -196,6 +197,7 @@ export type GameRow = {
   lines_json: string | null;
   lines_closing_json: string | null;
   lines_updated_at: string | null;
+  links_json: string | null;
   updated_at: string;
 };
 

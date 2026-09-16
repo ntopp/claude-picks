@@ -5,7 +5,8 @@
 import { LEAGUES, type League } from './config.js';
 import { db, expireStaleProposals, getGame, nowIso, type GameRow, type ProposalRow } from './db.js';
 import { scoreboard, upcomingWeek } from './espn.js';
-import { pickedFrom, type Lines } from './odds.js';
+import { betLinkFor, pickedFrom, type Lines } from './odds.js';
+import type { BetLinks } from './espn.js';
 
 // Upcoming week per league, cached for an hour so /status stays cheap.
 let weekCache: { at: number; value: Record<League, { season: number; week: number } | null> } | null = null;
@@ -38,6 +39,7 @@ export function withGame(p: ProposalRow) {
       : null,
     currentLine: now?.line ?? null,
     currentPrice: now?.price ?? null,
+    betLink: g?.links_json ? betLinkFor(JSON.parse(g.links_json) as BetLinks, p.market, p.side) : null,
   };
 }
 
@@ -79,6 +81,7 @@ export function slateFor(league: League, season: number, week: number) {
       status: g.status,
       lines: g.lines_json ? (JSON.parse(g.lines_json) as Lines) : null,
       open: g.lines_open_json ? (JSON.parse(g.lines_open_json) as Lines) : null,
+      links: g.links_json ? (JSON.parse(g.links_json) as BetLinks) : null,
       view: g.lean ? { lean: g.lean, confidence: g.view_confidence, note: g.view_note, at: g.view_at } : null,
       proposal: g.proposal_id
         ? { id: g.proposal_id, pick: g.proposal_pick, status: g.proposal_status, confidence: g.proposal_confidence, result: g.proposal_result, origin: g.proposal_origin }

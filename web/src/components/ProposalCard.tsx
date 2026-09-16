@@ -109,6 +109,14 @@ export function ProposalCard({ p, tz, maxUnits, onChanged, readOnly }: { p: Prop
       <div className="bear">
         <b>Bear case:</b> {p.bear_case}
       </div>
+      {!kickedOff && p.betLink && (
+        <div className="row small">
+          <a className="btn sm book" href={p.betLink} target="_blank" rel="noopener noreferrer">
+            Open bet slip at DraftKings ↗
+          </a>
+          <span className="muted">Places nothing; opens the book with this side selected. The number there may differ from ours.</span>
+        </div>
+      )}
       {p.decision_note && (
         <div className="muted small">
           Your note: {p.decision_note}

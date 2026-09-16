@@ -198,3 +198,5 @@ table.board td, table.decided td { vertical-align: middle; }
 @media (max-width: 700px) {
   .weekbar > .btn { width: 100%; }
 }
+
+.btn.book { text-decoration: none; color: var(--accent); border-color: var(--accent); background: transparent; display: inline-block; }
