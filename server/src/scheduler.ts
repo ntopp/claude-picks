@@ -5,6 +5,7 @@ import { runApiScan } from './engine/run.js';
 import { gameInProgress, syncAndGrade } from './grading.js';
 import { buildReview } from './review.js';
 import { buildPacket } from './slate.js';
+import { publish } from './publish.js';
 
 /**
  * Every 5 minutes while one of our games is being played, otherwise every 30: refresh any week
@@ -53,6 +54,8 @@ export function startScheduler() {
       try {
         const p = await buildPacket({ noDetail: true });
         logEvent('info', `Monday line snapshot: ${p.leagues.map((l) => `${l.league} wk ${l.week} ${l.games.length} games`).join(', ')}`);
+        // Weekend results are graded by now; refresh the public page and tell the friends topic.
+        await publish({ reason: 'results', notify: true });
       } catch (e) {
         logEvent('warn', `Monday line snapshot failed: ${(e as Error).message}`);
       }

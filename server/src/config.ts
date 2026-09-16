@@ -22,12 +22,16 @@ export const config = {
 
   ntfy: {
     topic: (process.env.NTFY_TOPIC ?? '').trim(),
+    friendsTopic: (process.env.NTFY_FRIENDS_TOPIC ?? '').trim(), // picks-only pushes for people following along
     server: (process.env.NTFY_SERVER ?? 'https://ntfy.sh').replace(/\/$/, ''),
   },
 
   /** Where a phone opens the dashboard; used as the tap-through link on pushes. Set DASHBOARD_URL or let Tailscale be detected. */
   dashboardUrl: (process.env.DASHBOARD_URL ?? '').trim().replace(/\/$/, '') || detectDashboardUrl(),
   webPort: Number(process.env.WEB_PORT ?? 5174),
+
+  /** Public read-only page (GitHub Pages). Blank disables the friends pushes; the page is still generated. */
+  pagesUrl: (process.env.PAGES_URL ?? '').trim(),
 };
 
 export const hasAnthropicKey = () => !!config.anthropic.apiKey;

@@ -42,6 +42,10 @@ The dashboard installs as an app (Add to Home Screen) and is laid out for a phon
 2. **Get pushes.** Install the [ntfy](https://ntfy.sh) app, subscribe to the topic in `.env` (`NTFY_TOPIC`, treat it like a password), then `npm run notify:test`. You get a push when picks are proposed and when bets settle; tapping opens the dashboard.
 3. **Install.** Open the address in the phone browser and choose Add to Home Screen.
 
+## Public page for friends
+
+`npm run publish` renders a read-only page — this week's picks with reasoning, the board, the season scoreboard, prior weeks collapsed — to `docs/index.html` and pushes it; GitHub Pages serves it (Settings → Pages → Deploy from branch → main, /docs). It publishes itself Thursday after the picks and Monday morning after the weekend grades. Set `PAGES_URL` in `.env` and a `NTFY_FRIENDS_TOPIC`; anyone who subscribes to that topic in the ntfy app gets a "picks are up" / "results are in" push with the link, and nothing else.
+
 ## Weekly workflow
 
 | When | What |
@@ -49,6 +53,7 @@ The dashboard installs as an app (Add to Home Screen) and is laid out for a phon
 | Thu 8:30 AM | Lines are up and Wednesday practice reports are in. A scheduled Claude Code task runs the session flow (packet → research → propose) and pushes the picks to your phone. Or run a scan yourself from the Runs tab. |
 | Thu–Sat | Execute or Pass each proposal, with a note if you like. Line movement since the pick is shown on the card. |
 | Thu–Mon | Games play; the server grades as they finish. Picks tab shows live scores on your open bets. |
+| Mon 8:00 AM | Lines-only snapshot of the next slate; public page refreshed with the weekend's results. |
 | Tue | Review is written. Read it before the next scan. |
 
 ### Claude Code session engine
@@ -88,7 +93,9 @@ server/src
   stats.ts        the scoreboard
   review.ts       weekly review
   routes.ts       API for the dashboard
-  scheduler.ts    grading (5 min live / 30 min), Monday line snapshot, Wednesday scan, Tuesday review
+  scheduler.ts    grading (5 min live / 30 min), Monday snapshot + publish, Wednesday scan, Tuesday review
+  weeks.ts        experiment weeks (NFL week + its college week), board slates
+  publish.ts      the public read-only page (docs/index.html) and its git push
 web/src
   pages/          Picks, Results, Scoreboard, Runs, Settings
   components/     ProposalCard (execute / pass), UnitsChart

@@ -13,7 +13,7 @@ When the user asks for picks / a slate / proposals from a session (no `ANTHROPIC
 3. Write the honest bear case for each idea first; if it wins, put the game in `passes`. In session mode you are also the red team (`RED_TEAM` in `prompt.ts`): apply that scrutiny to your own list before saving.
 4. Write JSON matching `SlateResponseSchema` (`server/src/engine/schema.ts`) to `data/response.json`. `game_id` is the ESPN id from the packet table. `line` is the PICKED side's own number (+4.5 for a dog, -4.5 for a favorite; the total for over/under). `price` is the packet's price for that side. Also fill `board`: one entry per game with a line (both leagues) — lean in market terms, confidence 1-10 (under 5 = no bet), one-line note. The dashboard shows the board under the picks, tabbed NFL / NCAA.
 5. `npm run propose -- --file data/response.json --kind weekly` (or `adhoc`). The rails drop anything invalid and print why.
-6. Tell the user what was proposed and why; they Execute or Pass from the dashboard. Never mark a proposal executed from a session — that is the user's action.
+6. `npm run publish -- --picks` regenerates the public page (`docs/index.html`), pushes it, and pings the friends ntfy topic. Then tell the user what was proposed and why; they Execute or Pass from the dashboard. Never mark a proposal executed from a session — that is the user's action.
 
 A desktop scheduled task (`weekly-football-picks`, Thursdays 8:30 AM) runs exactly this flow unattended; `npm run propose` sends the ntfy push itself when `NTFY_TOPIC` is set.
 

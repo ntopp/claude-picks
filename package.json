@@ -20,7 +20,8 @@
     "test": "npm test --workspace=server",
     "start": "node scripts/start-all.mjs",
     "stop": "node scripts/stop.mjs",
-    "notify:test": "npm run notify:test --workspace=server --"
+    "notify:test": "npm run notify:test --workspace=server --",
+    "publish": "npm run publish --workspace=server --"
   },
   "allowScripts": {
     "esbuild@0.28.2": true

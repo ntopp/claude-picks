@@ -25,3 +25,22 @@ export async function notify(title: string, body: string, opts: { priority?: 'hi
     console.error(`ntfy failed: ${(e as Error).message}`);
   }
 }
+
+/** Picks-only push for friends following along. Tapping opens the public page. Never throws. */
+export async function notifyFriends(title: string, body: string) {
+  if (!config.ntfy.friendsTopic) return;
+  try {
+    await fetch(`${config.ntfy.server}/${encodeURIComponent(config.ntfy.friendsTopic)}`, {
+      method: 'POST',
+      headers: {
+        Title: `Claude Picks: ${title}`,
+        ...(config.pagesUrl ? { Click: config.pagesUrl, Actions: `view, Open the page, ${config.pagesUrl}, clear=true` } : {}),
+        Tags: 'football',
+      },
+      body,
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch (e) {
+    console.error(`ntfy (friends) failed: ${(e as Error).message}`);
+  }
+}
