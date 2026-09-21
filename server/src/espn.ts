@@ -220,9 +220,11 @@ export async function scoreboard(league: League, week?: number, season?: number)
  */
 export async function upcomingWeek(league: League): Promise<{ season: number; week: number }> {
   const sb = await scoreboard(league);
-  const allDone = sb.games.length > 0 && sb.games.every((g) => g.status === 'final' || g.status === 'canceled' || g.status === 'postponed');
+  // The week is spent once at most one game is left (Monday night): by then next week is what you bet on.
+  const remaining = sb.games.filter((g) => !(g.status === 'final' || g.status === 'canceled' || g.status === 'postponed')).length;
+  const spent = sb.games.length > 0 && remaining <= 1;
   const maxWeek = sb.weeks.length ? Math.max(...sb.weeks.map((w) => w.week)) : sb.week;
-  return { season: sb.season, week: allDone && sb.week < maxWeek ? sb.week + 1 : sb.week };
+  return { season: sb.season, week: spent && sb.week < maxWeek ? sb.week + 1 : sb.week };
 }
 
 // ---- game summary ---------------------------------------------------------
