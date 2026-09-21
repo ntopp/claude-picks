@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, fmtMoney, fmtPct, fmtSignedPct, fmtUnits, signClass, type Bucket, type ReviewRow, type Scoreboard } from '../api';
+import { api, fmtMoney, fmtPct, fmtSignedPct, fmtUnits, signClass, type Bucket, type Lesson, type ReviewRow, type Scoreboard } from '../api';
 import { UnitsChart } from '../components/UnitsChart';
 import { useToast } from '../toast';
 
@@ -61,13 +61,15 @@ export function ScoreboardPage() {
   const toast = useToast();
   const [sb, setSb] = useState<Scoreboard | null>(null);
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
     try {
-      const [s, r] = await Promise.all([api.scoreboard(), api.reviews()]);
+      const [s, r, l] = await Promise.all([api.scoreboard(), api.reviews(), api.lessons()]);
       setSb(s);
       setReviews(r);
+      setLessons(l);
     } catch (e) {
       toast('err', (e as Error).message);
     }
@@ -135,11 +137,29 @@ export function ScoreboardPage() {
         <p style={{ margin: 0 }}>{sb.humanEdge.verdict}</p>
         <p className="muted small" style={{ margin: '6px 0 0' }}>
           Executed ROI {fmtSignedPct(sb.humanEdge.executedRoi)} · Passed ROI {fmtSignedPct(sb.humanEdge.passedRoi)} ({sb.passed.n} passed picks graded as if bet at the proposed stake)
-          {sb.leans.n > 0 && (
+          {sb.leanBets.n > 0 && (
             <>
-              {' '}· Board leans you bet yourself: {sb.leans.wins}-{sb.leans.losses}-{sb.leans.pushes}, {fmtUnits(sb.leans.net)} (ROI {fmtSignedPct(sb.leans.roi)}) — not counted against the engine.
+              {' '}· Board leans you bet yourself: {sb.leanBets.wins}-{sb.leanBets.losses}-{sb.leanBets.pushes}, {fmtUnits(sb.leanBets.net)} (ROI {fmtSignedPct(sb.leanBets.roi)}) — not counted against the engine.
             </>
           )}
+        </p>
+      </div>
+
+      <div className="grid cols-2">
+        <BucketTable
+          title="Board leans by confidence (every read, graded as 1u at its own line)"
+          rows={[['All leans', sb.leans.all] as [string, Bucket], ...sb.leans.byConfidence.map((b) => [b.label, b.bucket] as [string, Bucket]), ['Leans at 5+ that were not picks', sb.leans.wouldBePicks] as [string, Bucket]]}
+          breakEven={be}
+        />
+        <BucketTable title="Baselines (dumb rules on every final game at the close)" rows={Object.entries(sb.baselines)} breakEven={be} />
+        <BucketTable title="Leans by league" rows={Object.entries(sb.leans.byLeague).map(([k, b]) => [label(k), b])} breakEven={be} />
+        <BucketTable title="Leans by market" rows={Object.entries(sb.leans.byMarket).map(([k, b]) => [label(k), b])} breakEven={be} />
+      </div>
+
+      <div className="card">
+        <h2>Engine picks: how they compare</h2>
+        <p className="muted small" style={{ margin: 0 }}>
+          The leans table is the calibration check: if the engine's reads mean anything, the 5s and 6s should win more often than the 3s. The baselines are what a rule with no research would have done on the same games — the picks need to beat those, not just 52.4%.
         </p>
       </div>
 
@@ -183,6 +203,46 @@ export function ScoreboardPage() {
           </div>
         </div>
       )}
+
+      <div className="card">
+        <h2>
+          Lessons <span className="right muted small">written by the Tuesday review; proposals wait for your call</span>
+        </h2>
+        {lessons.length === 0 ? (
+          <div className="empty">Nothing yet. The Tuesday review writes observations here and, once there is enough evidence, proposes playbook changes for you to adopt or reject.</div>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <tbody>
+                {lessons.map((l) => (
+                  <tr key={l.id}>
+                    <td>
+                      <span className={`badge ${l.kind === 'proposal' ? (l.status === 'adopted' ? 'win' : l.status === 'rejected' ? 'loss' : 'pending') : 'passed'}`}>{l.kind === 'proposal' ? l.status : 'note'}</span>
+                    </td>
+                    <td className="wrap">
+                      {l.text}
+                      {l.evidence ? <div className="muted small">{l.evidence}</div> : null}
+                    </td>
+                    <td className="muted small">{new Date(l.created_at).toLocaleDateString()}</td>
+                    <td>
+                      {l.kind === 'proposal' && l.status === 'open' && (
+                        <span className="row">
+                          <button className="btn sm execute" onClick={() => api.setLessonStatus(l.id, 'adopted').then(load)}>
+                            Adopt
+                          </button>
+                          <button className="btn sm" onClick={() => api.setLessonStatus(l.id, 'rejected').then(load)}>
+                            Reject
+                          </button>
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div className="card">
         <h2>

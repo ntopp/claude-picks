@@ -3,15 +3,16 @@ import { config, hasAnthropicKey } from './config.js';
 import { db, getSettings, logEvent } from './db.js';
 import { runApiScan } from './engine/run.js';
 import { gameInProgress, syncAndGrade } from './grading.js';
-import { buildReview } from './review.js';
 import { buildPacket } from './slate.js';
 import { publish } from './publish.js';
+import { notify } from './notify.js';
 
 /**
  * Every 5 minutes while one of our games is being played, otherwise every 30: refresh any week
  * that still has an ungraded pick (captures line moves, freezes the closing line at kickoff,
- * grades finals). Monday 08:00: lines-only snapshot of the whole slate. Wednesday 10:00: weekly API
- * scan if enabled. Tuesday 08:00: weekly review.
+ * grades finals). Monday 08:00: lines-only snapshot of the whole slate and the results publish. Wednesday
+ * 10:00: weekly API scan if enabled. Thursday 11:45: warn if the research run has not happened. The Tuesday
+ * review is a desktop scheduled task (see CLAUDE.md), not a server job.
  */
 export function startScheduler() {
   const tz = config.displayTz;
@@ -63,17 +64,17 @@ export function startScheduler() {
     { timezone: tz },
   );
 
+  // Thursday noon: the research run should have produced this week's picks by now. If no weekly run
+  // landed today, push a warning instead of letting a hung session go unnoticed for four days.
   cron.schedule(
-    '0 8 * * 2',
+    '45 11 * * 4',
     async () => {
-      const n = (db.prepare(`SELECT COUNT(*) AS n FROM proposals WHERE graded_at > datetime('now', '-7 days')`).get() as { n: number }).n;
-      if (!n) return;
-      try {
-        await buildReview();
-        logEvent('info', 'Weekly review written');
-      } catch (e) {
-        logEvent('warn', `Weekly review failed: ${(e as Error).message}`);
-      }
+      const todayLocal = new Date().toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
+      const runs = db.prepare("SELECT started_at FROM runs WHERE kind = 'weekly' ORDER BY id DESC LIMIT 5").all() as { started_at: string }[];
+      const ranToday = runs.some((r) => new Date(r.started_at).toLocaleDateString('en-CA', { timeZone: tz }) === todayLocal);
+      if (ranToday) return;
+      logEvent('warn', 'Thursday research run has not completed by 11:45');
+      await notify('Thursday research did not run', 'No picks were proposed today. Open the "Thursday football picks" task in Claude and check for a stuck permission prompt, or click Run now.', { priority: 'high', tags: 'warning' });
     },
     { timezone: tz },
   );

@@ -124,6 +124,7 @@ export function Runs({ status, onChanged }: { status: Status; onChanged: () => v
                       <td>{r.week_label}</td>
                       <td>
                         {r.engine}
+                        {r.model ? <span className="muted small"> · {r.model.replace('claude-', '')}</span> : ''}
                         {!r.finished_at && !r.error ? <span className="badge pending"> running</span> : ''}
                         {r.error ? <span className="badge loss"> error</span> : ''}
                       </td>

@@ -8,6 +8,7 @@ import { db, expireStaleProposals, getSettings, logEvent, nowIso } from '../db.j
 import { closingLineValue, pickLabel, pickedFrom, type Lines } from '../odds.js';
 import { buildPacket, renderPacketMarkdown, type Packet, type PacketGame } from '../slate.js';
 import { notify } from '../notify.js';
+import { resolveLean } from '../leans.js';
 import { runClaudeSlate, runRedTeam } from './claude.js';
 import { type BoardEntry, type ProposalInput, type SlateResponse } from './schema.js';
 
@@ -17,10 +18,10 @@ export function weekLabel(packet: Packet) {
   return packet.leagues.map((l) => `${LEAGUE_LABEL[l.league]} wk ${l.week}`).join(' / ');
 }
 
-export function createRun(kind: RunKind, engine: 'api' | 'session', packet: Packet): number {
+export function createRun(kind: RunKind, engine: 'api' | 'session', packet: Packet, model: string | null = null): number {
   const r = db
-    .prepare('INSERT INTO runs (started_at, kind, engine, leagues, week_label, packet_json) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(nowIso(), kind, engine, packet.leagues.map((l) => l.league).join(','), weekLabel(packet), JSON.stringify(packet));
+    .prepare('INSERT INTO runs (started_at, kind, engine, leagues, week_label, packet_json, model) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(nowIso(), kind, engine, packet.leagues.map((l) => l.league).join(','), weekLabel(packet), JSON.stringify(packet), model);
   return Number(r.lastInsertRowid);
 }
 
@@ -117,15 +118,27 @@ export function insertProposals(runId: number | null, packet: Packet, inputs: Pr
 
 /** Store the engine's read on each game it evaluated; unknown game ids are ignored. */
 export function upsertViews(runId: number | null, packet: Packet, board: BoardEntry[]): number {
-  const ids = new Set(packet.leagues.flatMap((l) => l.games.map((g) => g.id)));
-  const stmt = db.prepare(
-    `INSERT INTO game_views (game_id, run_id, updated_at, lean, confidence, note) VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(game_id) DO UPDATE SET run_id = excluded.run_id, updated_at = excluded.updated_at, lean = excluded.lean, confidence = excluded.confidence, note = excluded.note`,
+  const games = new Map(packet.leagues.flatMap((l) => l.games.map((g) => [g.id, g] as const)));
+  // The latest read replaces the previous one (and its grade); every read is also appended to history.
+  const latest = db.prepare(
+    `INSERT INTO game_views (game_id, run_id, updated_at, lean, confidence, note, market, side, line, price, result, margin, graded_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)
+     ON CONFLICT(game_id) DO UPDATE SET run_id = excluded.run_id, updated_at = excluded.updated_at, lean = excluded.lean, confidence = excluded.confidence,
+       note = excluded.note, market = excluded.market, side = excluded.side, line = excluded.line, price = excluded.price, result = NULL, margin = NULL, graded_at = NULL`,
+  );
+  const history = db.prepare(
+    'INSERT INTO game_view_history (game_id, run_id, ts, lean, confidence, note, market, side, line, price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
   );
   let n = 0;
   for (const b of board) {
-    if (!ids.has(b.game_id)) continue;
-    stmt.run(b.game_id, runId, nowIso(), b.lean.trim() || 'no lean', b.confidence, b.note.trim());
+    const g = games.get(b.game_id);
+    if (!g) continue;
+    const lean = b.lean.trim() || 'no lean';
+    const bet = resolveLean(lean, { home_abbr: g.home.abbr, away_abbr: g.away.abbr }, g.lines);
+    const ts = nowIso();
+    const args = [b.game_id, runId, ts, lean, b.confidence, b.note.trim(), bet?.market ?? null, bet?.side ?? null, bet?.line ?? null, bet?.price ?? null] as const;
+    latest.run(...args);
+    history.run(...args);
     n++;
   }
   return n;
@@ -140,9 +153,9 @@ function pickList(ids: number[]): string {
 }
 
 /** Import a response produced by a Claude Code session. */
-export function recordSessionSlate(kind: RunKind, packet: Packet, response: SlateResponse) {
+export function recordSessionSlate(kind: RunKind, packet: Packet, response: SlateResponse, model: string | null = null) {
   expireStaleProposals();
-  const runId = createRun(kind, 'session', packet);
+  const runId = createRun(kind, 'session', packet, model);
   const result = insertProposals(runId, packet, response.proposals);
   const views = upsertViews(runId, packet, response.board);
   finishRun(runId, { summary: response.week_summary, response_json: JSON.stringify({ ...response, dropped: result.dropped }) });

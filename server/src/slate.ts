@@ -4,7 +4,7 @@
  * lines) in the DB, and renders markdown for a Claude Code session or the API engine.
  */
 import { LEAGUE_LABEL, LEAGUES, type League } from './config.js';
-import { db, getSettings, listProposals, nowIso, type GameRow } from './db.js';
+import { db, getSettings, listLessons, listProposals, nowIso, type GameRow } from './db.js';
 import { gameDetail, mapLimit, scoreboard, upcomingWeek, type GameDetail, type ScoreboardGame } from './espn.js';
 import { fmtLine, fmtPrice, type Lines } from './odds.js';
 
@@ -182,6 +182,12 @@ export function renderPacketMarkdown(p: Packet, tz = 'America/Chicago'): string 
         }
       }
     }
+  }
+  const lessons = listLessons(8);
+  if (lessons.length) {
+    md.push('');
+    md.push('## Lessons from the weekly reviews (observations; adopted proposals are rules)');
+    for (const l of lessons) md.push(`- ${l.kind === 'proposal' ? (l.status === 'adopted' ? 'RULE' : 'proposed, not adopted') : 'note'}: ${l.text}${l.evidence ? ` (${l.evidence})` : ''}`);
   }
   md.push('');
   md.push('## What to return');

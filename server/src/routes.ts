@@ -9,7 +9,7 @@ import { computeScoreboard } from './stats.js';
 import { buildReview } from './review.js';
 import { pickedFrom, pickLabel, type Lines } from './odds.js';
 import { slateFor, upcomingWeeks, weekDetail, weekTabs, withGame } from './weeks.js';
-import type { Market, Side } from './engine/schema.js';
+import { parseLean } from './leans.js';
 
 export const api = Router();
 
@@ -150,30 +150,6 @@ api.post('/board/:gameId/execute', (req, res) => {
   res.json({ ok: true, id: Number(r.lastInsertRowid), pick: label });
 });
 
-function parseLean(lean: string, g: GameRow): { market: Market; side: Side } | null {
-  const t = lean.trim();
-  let m = /^(over|under)\s+[\d.]+$/i.exec(t);
-  if (m) return { market: 'total', side: m[1].toLowerCase() as Side };
-  m = /^([A-Za-z&\-'.]+)\s+ML$/i.exec(t);
-  if (m) {
-    const side = teamSide(m[1], g);
-    return side ? { market: 'moneyline', side } : null;
-  }
-  m = /^([A-Za-z&\-'.]+)\s+([+-]?[\d.]+|PK)$/i.exec(t);
-  if (m) {
-    const side = teamSide(m[1], g);
-    return side ? { market: 'spread', side } : null;
-  }
-  return null;
-}
-
-function teamSide(abbr: string, g: GameRow): 'home' | 'away' | null {
-  const a = abbr.toUpperCase();
-  if (a === g.home_abbr.toUpperCase()) return 'home';
-  if (a === g.away_abbr.toUpperCase()) return 'away';
-  return null;
-}
-
 api.get('/games', (req, res) => {
   const league = String(req.query.league ?? 'nfl');
   const season = Number(req.query.season);
@@ -191,11 +167,11 @@ api.get('/games', (req, res) => {
 });
 
 api.get('/runs', (_req, res) => {
-  res.json(db.prepare('SELECT id, started_at, finished_at, kind, engine, leagues, week_label, summary, error, input_tokens, output_tokens FROM runs ORDER BY id DESC LIMIT 100').all());
+  res.json(db.prepare('SELECT id, started_at, finished_at, kind, engine, model, leagues, week_label, summary, error, input_tokens, output_tokens FROM runs ORDER BY id DESC LIMIT 100').all());
 });
 
 api.get('/runs/:id', (req, res) => {
-  const run = db.prepare('SELECT id, started_at, finished_at, kind, engine, leagues, week_label, summary, response_json, error, input_tokens, output_tokens FROM runs WHERE id = ?').get(Number(req.params.id)) as
+  const run = db.prepare('SELECT id, started_at, finished_at, kind, engine, model, leagues, week_label, summary, response_json, error, input_tokens, output_tokens FROM runs WHERE id = ?').get(Number(req.params.id)) as
     | { response_json: string | null }
     | undefined;
   if (!run) return res.status(404).json({ error: 'No such run' });
@@ -241,6 +217,17 @@ api.put('/settings', (req, res) => res.json(updateSettings((req.body ?? {}) as P
 api.get('/events', (req, res) => {
   const limit = Math.min(Number(req.query.limit ?? 60), 500);
   res.json(db.prepare('SELECT id, ts, level, message FROM events ORDER BY id DESC LIMIT ?').all(limit));
+});
+
+api.get('/lessons', (_req, res) => res.json(db.prepare('SELECT * FROM lessons ORDER BY id DESC LIMIT 100').all()));
+/** Adopt or reject a proposed playbook change. Adopted proposals become rules in every packet. */
+api.post('/lessons/:id/status', (req, res) => {
+  const status = (req.body as { status?: string })?.status;
+  if (status !== 'open' && status !== 'adopted' && status !== 'rejected') return res.status(400).json({ error: 'status must be open | adopted | rejected' });
+  const r = db.prepare('UPDATE lessons SET status = ? WHERE id = ?').run(status, Number(req.params.id));
+  if (!r.changes) return res.status(404).json({ error: 'No such lesson' });
+  logEvent('info', `Lesson #${req.params.id} marked ${status}`);
+  res.json({ ok: true });
 });
 
 api.get('/reviews', (_req, res) => res.json(db.prepare('SELECT id, created_at, label, report_md, narrative FROM reviews ORDER BY id DESC LIMIT 50').all()));

@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { config, LEAGUE_LABEL } from './config.js';
-import { logEvent } from './db.js';
+import { db, logEvent } from './db.js';
 import { betLinkFor, fmtLine, fmtPrice } from './odds.js';
 import { computeScoreboard, type Bucket } from './stats.js';
 import { weekDetail, weekTabs, type SlateGame, type WeekDetail } from './weeks.js';
@@ -131,6 +131,14 @@ ${tile('Closing line value', sb.engine.avgClv === null ? '–' : `${sb.engine.av
 ${tile('Unsettled', String(unsettled), 'picks waiting on a final')}
 </div>
 ${weeks.map((d, i) => weekHtml(d, i === 0)).join('\n')}
+<div class="card"><h2>Board leans by confidence <span class="muted" style="text-transform:none;letter-spacing:0">— every read graded as 1u at its own line; if the scale means anything, the 5s beat the 3s</span></h2><div class="tw"><table><thead><tr><th></th><th>W-L-P</th><th>Win %</th><th>Units</th><th>ROI</th><th>Avg CLV</th></tr></thead><tbody>
+${bucketRow('All leans', sb.leans.all)}
+${sb.leans.byConfidence.map((b) => bucketRow(b.label, b.bucket)).join('')}
+${bucketRow('Leans at 5+ that were not picks', sb.leans.wouldBePicks)}
+</tbody></table></div></div>
+<div class="card"><h2>Baselines <span class="muted" style="text-transform:none;letter-spacing:0">— dumb rules on every final game at the closing line; the picks have to beat these, not just 52.4%</span></h2><div class="tw"><table><thead><tr><th></th><th>W-L-P</th><th>Win %</th><th>Units</th><th>ROI</th><th>Avg CLV</th></tr></thead><tbody>
+${Object.entries(sb.baselines).map(([k, b]) => bucketRow(k, b)).join('')}
+</tbody></table></div></div>
 <div class="card"><h2>Season scoreboard (engine picks)</h2><div class="tw"><table><thead><tr><th></th><th>W-L-P</th><th>Win %</th><th>Units</th><th>ROI</th><th>Avg CLV</th></tr></thead><tbody>
 ${bucketRow('All picks', sb.engine)}
 ${Object.entries(sb.byLeague).map(([k, b]) => bucketRow(label(k), b)).join('')}
@@ -141,6 +149,10 @@ ${Object.entries(sb.byConfidence).map(([k, b]) => bucketRow(`Confidence ${k}`, b
 <p class="muted small">CLV = closing line value: how many points better the pick's number was than where the market closed. Consistently positive CLV is the earliest real evidence of edge; win rate takes hundreds of bets to mean anything.</p></div>
 <footer>Paper bets only. Lines are DraftKings via ESPN at proposal time; you will not get the same number. If you bet, that is your decision and your money.</footer>
 </div></body></html>`;
+}
+
+function unsettledCount(): number {
+  return (db.prepare(`SELECT COUNT(*) AS n FROM proposals WHERE graded_at IS NULL AND status IN ('executed', 'pending', 'passed')`).get() as { n: number }).n;
 }
 
 /** Write docs/index.html; commit and push if it changed. Returns true when a new version went out. */
@@ -169,7 +181,7 @@ export async function publish(opts: { reason: 'picks' | 'results' | 'manual'; no
     const sb = computeScoreboard();
     const rec = `${sb.engine.wins}-${sb.engine.losses}${sb.engine.pushes ? `-${sb.engine.pushes}` : ''}`;
     if (opts.reason === 'picks') void notifyFriends("This week's picks are up", `Season: ${rec}, ${units(sb.engine.net)}. Picks, reasoning and the board: ${config.pagesUrl}`);
-    else if (opts.reason === 'results') void notifyFriends('Results are in', `Season: ${rec}, ${units(sb.engine.net)}. ${config.pagesUrl}`);
+    else if (opts.reason === 'results') void notifyFriends('Weekend results', `Season: ${rec}, ${units(sb.engine.net)}${sb.pending || unsettledCount() ? ' (Monday night still open)' : ''}. ${config.pagesUrl}`);
   }
   return true;
 }

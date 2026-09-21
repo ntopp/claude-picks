@@ -1,6 +1,6 @@
 /**
  * Insert proposals produced by a Claude Code session.
- *   npm run propose -- --file data/response.json [--kind weekly|adhoc]
+ *   npm run propose -- --file data/response.json [--kind weekly|adhoc] [--model claude-opus-5]
  * The file must match SlateResponseSchema (src/engine/schema.ts). Games are validated
  * against data/packet-latest.json from the most recent `npm run packet`.
  */
@@ -16,6 +16,8 @@ const fileIdx = args.indexOf('--file');
 const file = fileIdx >= 0 ? args[fileIdx + 1] : undefined;
 const kindIdx = args.indexOf('--kind');
 const kind = (kindIdx >= 0 ? args[kindIdx + 1] : 'adhoc') as RunKind;
+const modelIdx = args.indexOf('--model');
+const model = modelIdx >= 0 ? args[modelIdx + 1] : null; // which Claude produced the picks; the experiment tracks it
 if (!file) {
   console.error('usage: npm run propose -- --file <response.json> [--kind weekly|adhoc]');
   process.exit(1);
@@ -32,5 +34,5 @@ if (!fs.existsSync(packetPath)) {
   process.exit(1);
 }
 const packet = JSON.parse(fs.readFileSync(packetPath, 'utf8')) as Packet;
-const result = recordSessionSlate(kind, packet, response);
+const result = recordSessionSlate(kind, packet, response, model);
 console.log(JSON.stringify(result, null, 2));

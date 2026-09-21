@@ -127,10 +127,50 @@ CREATE TABLE IF NOT EXISTS reviews (
 );
 `);
 
+db.exec(`
+-- Every board read ever recorded, one row per run per game, so a Monday lean and a Thursday lean on the
+-- same game both survive. game_views keeps only the latest. Both are graded against the final.
+CREATE TABLE IF NOT EXISTS game_view_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id TEXT NOT NULL REFERENCES games(id),
+  run_id INTEGER REFERENCES runs(id),
+  ts TEXT NOT NULL,
+  lean TEXT NOT NULL,
+  confidence INTEGER NOT NULL,
+  note TEXT NOT NULL,
+  market TEXT, side TEXT, line REAL, price INTEGER,
+  result TEXT, margin REAL, graded_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_view_history_game ON game_view_history(game_id, ts);
+
+-- What the weekly review learned. Observations are notes; a proposal is a suggested playbook change that
+-- the user accepts or rejects (the engine never edits its own playbook). Recent lessons ride along in
+-- the packet so every run sees them.
+CREATE TABLE IF NOT EXISTS lessons (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at TEXT NOT NULL,
+  review_id INTEGER REFERENCES reviews(id),
+  kind TEXT NOT NULL,             -- observation | proposal
+  text TEXT NOT NULL,
+  evidence TEXT,                  -- the numbers behind it, with sample sizes
+  status TEXT NOT NULL DEFAULT 'open' -- open | adopted | rejected (proposals) ; observations stay open
+);
+`);
+
 // Additive migrations for databases created before these columns existed.
 for (const [table, column, ddl] of [
   ['proposals', 'origin', "TEXT NOT NULL DEFAULT 'engine'"], // engine = proposed as a pick | lean = user executed a board lean
+  ['proposals', 'clv_price', 'REAL'], // implied-probability points gained vs the closing price of the same side
   ['games', 'links_json', 'TEXT'], // sportsbook bet-slip deep links per side, refreshed on every sync
+  ['runs', 'model', 'TEXT'], // which Claude model produced the picks (session runs report it via --model)
+  // A lean parsed into a bet so it can be graded: market/side/line/price as they stood when the view was recorded.
+  ['game_views', 'market', 'TEXT'],
+  ['game_views', 'side', 'TEXT'],
+  ['game_views', 'line', 'REAL'],
+  ['game_views', 'price', 'INTEGER'],
+  ['game_views', 'result', 'TEXT'],
+  ['game_views', 'margin', 'REAL'],
+  ['game_views', 'graded_at', 'TEXT'],
 ] as const) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
   if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
@@ -226,6 +266,7 @@ export type ProposalRow = {
   lines_at_proposal_json: string | null;
   status: 'pending' | 'executed' | 'passed' | 'expired' | 'void';
   origin: 'engine' | 'lean';
+  clv_price: number | null;
   decided_at: string | null;
   decision_note: string | null;
   executed_units: number | null;
@@ -237,6 +278,13 @@ export type ProposalRow = {
   clv: number | null;
   graded_at: string | null;
 };
+
+export type LessonRow = { id: number; created_at: string; review_id: number | null; kind: 'observation' | 'proposal'; text: string; evidence: string | null; status: 'open' | 'adopted' | 'rejected' };
+
+/** Most recent lessons first; rejected proposals are left out since they are not guidance. */
+export function listLessons(limit = 20): LessonRow[] {
+  return db.prepare("SELECT * FROM lessons WHERE status != 'rejected' ORDER BY id DESC LIMIT ?").all(limit) as LessonRow[];
+}
 
 export function expireStaleProposals() {
   const r = db.prepare(`UPDATE proposals SET status = 'expired', decided_at = ? WHERE status = 'pending' AND expires_at < ?`).run(nowIso(), nowIso());

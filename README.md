@@ -54,7 +54,7 @@ The dashboard installs as an app (Add to Home Screen) and is laid out for a phon
 | Thu–Sat | Execute or Pass each proposal, with a note if you like. Line movement since the pick is shown on the card. |
 | Thu–Mon | Games play; the server grades as they finish. Picks tab shows live scores on your open bets. |
 | Mon 8:00 AM | Lines-only snapshot of the next slate; public page refreshed with the weekend's results. |
-| Tue | Review is written. Read it before the next scan. |
+| Tue 8:30 AM | A Claude session reviews the week: thesis vs outcome for each pick, leans by confidence, baselines, passes. Writes lessons; proposes playbook changes only with enough evidence, for you to adopt or reject. |
 
 ### Claude Code session engine
 
@@ -75,7 +75,9 @@ Other commands: `npm run grade` (settle now), `npm run review` (write a review n
 - **Win rate vs break-even.** At -110 you need 52.38% to profit. The bar chart draws that line.
 - **Closing line value (CLV).** How many points better your number was than where the market closed. Bettors who beat the close consistently are the ones who win long term; it is meaningful after ~30 picks, long before win rate is.
 - **Engine vs you vs passed.** The engine is scored on everything it proposed. You are scored on what you executed at your stake. Passed picks are graded as if bet, so the app can tell you whether your filter is adding value or leaving money on the table.
-- **By confidence.** A calibrated engine's 7s should win more often than its 5s. If they don't, confidence is noise.
+- **By confidence.** A calibrated engine's 7s should win more often than its 5s. If they don't, confidence is noise. The board leans make this measurable within weeks: every read on every game is graded as a 1u bet.
+- **Baselines.** Home dog, road dog, every favorite, every over, every under — at the closing line on the same games. "+3 units" only means something if it beats these.
+- **Lessons.** The Tuesday review writes what it learned; it may propose a playbook change only past minimum sample sizes, and you decide. Adopted proposals ride into every packet.
 
 ## Layout
 

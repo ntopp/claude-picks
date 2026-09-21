@@ -85,7 +85,18 @@ export type Bucket = {
   roi: number | null;
   avgClv: number | null;
   clvBeatRate: number | null;
+  avgClvPrice: number | null;
 };
+
+export type LeanStats = {
+  all: Bucket;
+  byConfidence: { label: string; bucket: Bucket }[];
+  byLeague: Record<string, Bucket>;
+  byMarket: Record<string, Bucket>;
+  wouldBePicks: Bucket;
+};
+
+export type Lesson = { id: number; created_at: string; review_id: number | null; kind: 'observation' | 'proposal'; text: string; evidence: string | null; status: 'open' | 'adopted' | 'rejected' };
 
 export type Scoreboard = {
   generatedAt: string;
@@ -95,7 +106,9 @@ export type Scoreboard = {
   engine: Bucket;
   human: Bucket;
   passed: Bucket;
-  leans: Bucket;
+  leanBets: Bucket;
+  leans: LeanStats;
+  baselines: Record<string, Bucket>;
   pending: number;
   humanEdge: { verdict: string; executedRoi: number | null; passedRoi: number | null };
   byLeague: Record<string, Bucket>;
@@ -121,6 +134,7 @@ export type Run = {
   finished_at: string | null;
   kind: string;
   engine: string;
+  model: string | null;
   leagues: string;
   week_label: string | null;
   summary: string | null;
@@ -243,6 +257,8 @@ export const api = {
   saveSettings: (patch: Partial<Settings>) => call<Settings>('/settings', { method: 'PUT', body: JSON.stringify(patch) }),
   events: () => call<{ id: number; ts: string; level: string; message: string }[]>('/events?limit=60'),
   reviews: () => call<ReviewRow[]>('/reviews'),
+  lessons: () => call<Lesson[]>('/lessons'),
+  setLessonStatus: (id: number, status: Lesson['status']) => call<{ ok: boolean }>(`/lessons/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
   runReview: () => call<{ id: number; report: string }>('/reviews/run', { method: 'POST' }),
 };
 
