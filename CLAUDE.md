@@ -15,7 +15,7 @@ When the user asks for picks / a slate / proposals from a session (no `ANTHROPIC
 5. `npm run propose -- --file data/response.json --kind weekly --model <your model id>` (or `adhoc`). Pass the model named in your system prompt so the experiment can tell process from model. The rails drop anything invalid and print why.
 6. `npm run publish -- --picks` regenerates the public page (`docs/index.html`), pushes it, and pings the friends ntfy topic. Then tell the user what was proposed and why; they Execute or Pass from the dashboard. Never mark a proposal executed from a session — that is the user's action.
 
-A desktop scheduled task (`weekly-football-picks`, Thursdays 8:30 AM) runs exactly this flow unattended; `npm run propose` sends the ntfy push itself when `NTFY_TOPIC` is set.
+**With `ANTHROPIC_API_KEY` set and `autoScan` on, the server does all of this itself** — Thursday 8:30 it builds the packet, researches with web search, red-teams its own list, inserts through the rails, publishes the page and pushes; Tuesday 8:30 it runs the review the same way. `npm run scan` and `npm run review -- --api` do it on demand, `npm run engine:check` verifies the key cheaply. The desktop scheduled tasks are the fallback for running it from a session instead.
 
 ## Grading and feedback
 

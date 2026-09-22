@@ -7,12 +7,13 @@
  * never edits its own playbook, and the guardrails below say how much evidence a proposal needs.
  */
 import fs from 'node:fs';
-import { z } from 'zod';
+
 import { config, hasAnthropicKey, LEAGUE_LABEL } from './config.js';
-import { db, listLessons, nowIso, type ProposalRow } from './db.js';
+import { db, listLessons, logEvent, nowIso, type ProposalRow } from './db.js';
 import { fmtLine, fmtPrice, pickedFrom, type Lines } from './odds.js';
 import { computeScoreboard, type Bucket } from './stats.js';
-import { runNarrative } from './engine/narrative.js';
+import { runClaudeReview } from './engine/claude.js';
+import { ReviewResponseSchema, type ReviewResponse } from './engine/schema.js';
 
 /** Minimum evidence before a playbook change may even be proposed. Below these, write an observation. */
 export const GUARDRAILS = {
@@ -123,13 +124,7 @@ export function buildReviewPacket(): string {
   return md.join('\n');
 }
 
-export const ReviewResponseSchema = z.object({
-  narrative: z.string().min(50),
-  observations: z.array(z.object({ text: z.string().min(5), evidence: z.string().default('') })).max(10),
-  proposals: z.array(z.object({ text: z.string().min(5), evidence: z.string().min(5) })).max(3),
-  next_week_focus: z.string().default(''),
-});
-export type ReviewResponse = z.infer<typeof ReviewResponseSchema>;
+export { ReviewResponseSchema, type ReviewResponse } from './engine/schema.js';
 
 /** Record a review written by a session (or the API narrative) plus its lessons. */
 export function storeReview(resp: ReviewResponse, label?: string): { id: number; lessons: number } {
@@ -155,20 +150,25 @@ export function storeReview(resp: ReviewResponse, label?: string): { id: number;
   return { id, lessons: n };
 }
 
-/** Stats-only review with an API narrative when a key is present (fallback when no session runs the review). */
+/**
+ * Run the whole review through the API engine: read the packet, reason over it, store the narrative,
+ * observations and any evidence-backed proposals. This is what the Tuesday job calls when a key is set.
+ */
+export async function runApiReview(label?: string): Promise<{ id: number; lessons: number; proposals: number }> {
+  if (!hasAnthropicKey()) throw new Error('ANTHROPIC_API_KEY is not set; run the review from a Claude Code session instead.');
+  const packet = buildReviewPacket();
+  const { parsed, usage } = await runClaudeReview(packet);
+  const stored = storeReview(parsed, label);
+  logEvent('info', `API review #${stored.id}: ${stored.lessons} lesson(s), ${parsed.proposals.length} proposal(s), ${usage.input + usage.output} tokens`);
+  return { ...stored, proposals: parsed.proposals.length };
+}
+
+/** Stats-only review, no engine. Used when there is no key and no session wrote one. */
 export async function buildReview(label?: string): Promise<{ id: number; report: string }> {
   const report = buildReviewPacket();
-  let narrative: string | null = null;
-  if (hasAnthropicKey()) {
-    try {
-      narrative = await runNarrative(report);
-    } catch (e) {
-      narrative = `(narrative failed: ${(e as Error).message})`;
-    }
-  }
   const sb = computeScoreboard();
-  const r = db.prepare('INSERT INTO reviews (created_at, label, stats_json, report_md, narrative) VALUES (?, ?, ?, ?, ?)').run(nowIso(), label ?? `Review through ${new Date().toISOString().slice(0, 10)}`, JSON.stringify(sb), report, narrative);
-  return { id: Number(r.lastInsertRowid), report: narrative ? `${report}\n\n## Narrative\n\n${narrative}` : report };
+  const r = db.prepare('INSERT INTO reviews (created_at, label, stats_json, report_md, narrative) VALUES (?, ?, ?, ?, ?)').run(nowIso(), label ?? `Review through ${new Date().toISOString().slice(0, 10)}`, JSON.stringify(sb), report, null);
+  return { id: Number(r.lastInsertRowid), report };
 }
 
 export function readReviewFile(file: string): ReviewResponse {

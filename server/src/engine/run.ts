@@ -3,7 +3,7 @@
  * Validation here is deterministic: the engine can propose anything, the insert path
  * drops what the rails do not allow and reports why.
  */
-import { LEAGUE_LABEL } from '../config.js';
+import { config, LEAGUE_LABEL } from '../config.js';
 import { db, expireStaleProposals, getSettings, logEvent, nowIso } from '../db.js';
 import { closingLineValue, pickLabel, pickedFrom, type Lines } from '../odds.js';
 import { buildPacket, renderPacketMarkdown, type Packet, type PacketGame } from '../slate.js';
@@ -165,11 +165,11 @@ export function recordSessionSlate(kind: RunKind, packet: Packet, response: Slat
 }
 
 /** Full API run: packet -> Claude (with web search) -> red team -> insert. */
-export async function runApiScan(kind: RunKind, opts: { userNote?: string; leagues?: ('nfl' | 'cfb')[]; week?: Partial<Record<'nfl' | 'cfb', number>> } = {}) {
+export async function runApiScan(kind: RunKind, opts: { userNote?: string; leagues?: ('nfl' | 'cfb')[]; week?: Partial<Record<'nfl' | 'cfb', number>>; publish?: boolean } = {}) {
   expireStaleProposals();
   const s = getSettings();
   const packet = await buildPacket({ leagues: opts.leagues, week: opts.week });
-  const runId = createRun(kind, 'api', packet);
+  const runId = createRun(kind, 'api', packet, config.anthropic.model);
   try {
     const md = renderPacketMarkdown(packet);
     const scan = await runClaudeSlate(md, { webSearch: s.webSearch, userNote: opts.userNote });
@@ -204,6 +204,11 @@ export async function runApiScan(kind: RunKind, opts: { userNote?: string; leagu
     });
     logEvent('info', `API slate: ${result.inserted.length} proposal(s) inserted, ${result.dropped.length} dropped, ${scan.usage.searches} searches`, result);
     if (result.inserted.length) void notify(`${result.inserted.length} new pick(s) to review`, pickList(result.inserted), { priority: 'high', tags: 'football,bell' });
+    // A weekly run is the whole job: the public page and the friends push go with it.
+    if (opts.publish ?? kind === 'weekly') {
+      const { publish } = await import('../publish.js');
+      await publish({ reason: 'picks', notify: result.inserted.length > 0 });
+    }
     return { runId, ...result };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

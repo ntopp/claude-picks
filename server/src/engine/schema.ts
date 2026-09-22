@@ -44,6 +44,16 @@ export const BoardEntrySchema = z.object({
 });
 export type BoardEntry = z.infer<typeof BoardEntrySchema>;
 
+/** What the weekly review writes back: the narrative plus what it learned. */
+export const ReviewResponseSchema = z.object({
+  narrative: z.string().min(50),
+  observations: z.array(z.object({ text: z.string().min(5), evidence: z.string().default('') })).max(10),
+  /** Playbook changes. Only past the evidence guardrails; an empty list is the normal answer. */
+  proposals: z.array(z.object({ text: z.string().min(5), evidence: z.string().min(5) })).max(3),
+  next_week_focus: z.string().default(''),
+});
+export type ReviewResponse = z.infer<typeof ReviewResponseSchema>;
+
 export const SlateResponseSchema = z.object({
   /** 2-5 sentences: the shape of the week, where the market looks soft, what you deliberately avoided. */
   week_summary: z.string(),

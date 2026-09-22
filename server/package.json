@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "notify:test": "tsx scripts/notify-test.ts",
-    "publish": "tsx scripts/publish.ts"
+    "publish": "tsx scripts/publish.ts",
+    "engine:check": "tsx scripts/engine-check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",

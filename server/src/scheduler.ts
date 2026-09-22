@@ -4,15 +4,16 @@ import { db, getSettings, logEvent } from './db.js';
 import { runApiScan } from './engine/run.js';
 import { gameInProgress, syncAndGrade } from './grading.js';
 import { buildPacket } from './slate.js';
+import { runApiReview } from './review.js';
 import { publish } from './publish.js';
 import { notify } from './notify.js';
 
 /**
  * Every 5 minutes while one of our games is being played, otherwise every 30: refresh any week
  * that still has an ungraded pick (captures line moves, freezes the closing line at kickoff,
- * grades finals). Monday 08:00: lines-only snapshot of the whole slate and the results publish. Wednesday
- * 10:00: weekly API scan if enabled. Thursday 11:45: warn if the research run has not happened. The Tuesday
- * review is a desktop scheduled task (see CLAUDE.md), not a server job.
+ * grades finals). Monday 08:00: lines-only snapshot of the whole slate and the results publish.
+ * Thursday 08:30: the weekly API scan when autoScan is on, publishing the page and pushing when it lands.
+ * Tuesday 08:30: the weekly API review. Thursday 11:45: warn if no run has happened by then.
  */
 export function startScheduler() {
   const tz = config.displayTz;
@@ -35,7 +36,7 @@ export function startScheduler() {
   );
 
   cron.schedule(
-    '0 10 * * 3',
+    '30 8 * * 4',
     async () => {
       if (!getSettings().autoScan || !hasAnthropicKey()) return;
       try {
@@ -59,6 +60,25 @@ export function startScheduler() {
         await publish({ reason: 'results', notify: true });
       } catch (e) {
         logEvent('warn', `Monday line snapshot failed: ${(e as Error).message}`);
+      }
+    },
+    { timezone: tz },
+  );
+
+  // Tuesday 08:30: the weekly review, once the weekend has graded. Needs a key; a session can still
+  // run it by hand (npm run review -> data/review.json -> npm run review -- --file).
+  cron.schedule(
+    '30 8 * * 2',
+    async () => {
+      if (!getSettings().autoScan || !hasAnthropicKey()) return;
+      const n = (db.prepare(`SELECT COUNT(*) AS n FROM proposals WHERE graded_at > datetime('now', '-8 days')`).get() as { n: number }).n;
+      if (!n) return;
+      try {
+        const r = await runApiReview();
+        await publish({ reason: 'results', notify: false });
+        if (r.proposals > 0) await notify('Review proposes a playbook change', `${r.proposals} proposal(s) waiting for your decision on the Scoreboard.`, { priority: 'high', tags: 'memo' });
+      } catch (e) {
+        logEvent('warn', `Weekly review failed: ${(e as Error).message}`);
       }
     },
     { timezone: tz },

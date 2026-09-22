@@ -2,8 +2,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import { config, hasAnthropicKey } from '../config.js';
-import { PLAYBOOK, RED_TEAM } from './prompt.js';
-import { SlateResponseSchema, type ProposalInput, type SlateResponse } from './schema.js';
+import { PLAYBOOK, RED_TEAM, REVIEWER } from './prompt.js';
+import { ReviewResponseSchema, SlateResponseSchema, type ProposalInput, type ReviewResponse, type SlateResponse } from './schema.js';
 
 export const RedTeamSchema = z.object({
   reviews: z.array(
@@ -74,6 +74,11 @@ export async function runClaudeSlate(packetMarkdown: string, opts: { webSearch: 
     : 'You have no research tools on this run; reason from the packet only and say so in key_factors where you would normally verify.';
   const user = [instructions, opts.userNote ? `Operator note: ${opts.userNote}` : '', '', packetMarkdown].filter(Boolean).join('\n');
   return structuredCall<SlateResponse>(PLAYBOOK, user, SlateResponseSchema, { webSearch: opts.webSearch, maxTokens: 32000 });
+}
+
+/** The weekly review: reason over the review packet, return the narrative, observations and proposals. */
+export async function runClaudeReview(reviewPacket: string) {
+  return structuredCall<ReviewResponse>(REVIEWER, reviewPacket, ReviewResponseSchema, { webSearch: false, maxTokens: 16000 });
 }
 
 /** Adversarial review of a slate's proposals. Returns null when there is nothing to review. */

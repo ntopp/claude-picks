@@ -4,7 +4,8 @@
  *                                              leans by confidence, baselines, passes, lessons on file)
  *   npm run review -- --file data/review.json  -> store a review written by a session (ReviewResponseSchema
  *                                              in src/review.ts): narrative + observations + proposals
- *   npm run review -- --auto                -> stats-only review with an API narrative if a key is set
+ *   npm run review -- --api                 -> run the whole review through the API engine (needs a key)
+ *   npm run review -- --auto                -> stats-only review, no engine
  *   npm run review -- --lessons             -> list lessons on file
  *   npm run review -- --adopt 3 | --reject 3  -> decide a proposed playbook change
  */
@@ -12,7 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../src/config.js';
 import { db, listLessons, logEvent } from '../src/db.js';
-import { buildReview, buildReviewPacket, readReviewFile, storeReview } from '../src/review.js';
+import { buildReview, buildReviewPacket, readReviewFile, runApiReview, storeReview } from '../src/review.js';
 
 const args = process.argv.slice(2);
 const flag = (name: string) => {
@@ -41,6 +42,9 @@ if (args.includes('--lessons')) {
   }
   const r = storeReview(readReviewFile(filePath));
   logEvent('info', `Review #${r.id} stored with ${r.lessons} lesson(s)`);
+  console.log(JSON.stringify(r));
+} else if (args.includes('--api')) {
+  const r = await runApiReview();
   console.log(JSON.stringify(r));
 } else if (args.includes('--auto')) {
   const r = await buildReview();
