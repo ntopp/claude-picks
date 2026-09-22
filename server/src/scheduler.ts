@@ -15,6 +15,13 @@ import { notify } from './notify.js';
  * Thursday 08:30: the weekly API scan when autoScan is on, publishing the page and pushing when it lands.
  * Tuesday 08:30: the weekly API review. Thursday 11:45: warn if no run has happened by then.
  */
+/** Did a weekly run land today (local time)? Both Thursday jobs ask this. */
+function ranWeeklyToday(tz: string): boolean {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
+  const runs = db.prepare("SELECT started_at FROM runs WHERE kind = 'weekly' ORDER BY id DESC LIMIT 5").all() as { started_at: string }[];
+  return runs.some((r) => new Date(r.started_at).toLocaleDateString('en-CA', { timeZone: tz }) === today);
+}
+
 export function startScheduler() {
   const tz = config.displayTz;
 
@@ -84,15 +91,24 @@ export function startScheduler() {
     { timezone: tz },
   );
 
+  // Thursday 08:30 without the API engine: nothing runs by itself, so nudge instead. The picks come from
+  // a Claude Code session in the project folder ("give me this week's picks").
+  cron.schedule(
+    '30 8 * * 4',
+    async () => {
+      if (getSettings().autoScan && hasAnthropicKey()) return; // the engine is handling it
+      if (ranWeeklyToday(tz)) return;
+      await notify('Time for this week’s picks', 'Open the claude-picks folder in Claude and ask for this week’s picks. Lines are up and the Wednesday injury reports are in.', { tags: 'football,calendar' });
+    },
+    { timezone: tz },
+  );
+
   // Thursday noon: the research run should have produced this week's picks by now. If no weekly run
   // landed today, push a warning instead of letting a hung session go unnoticed for four days.
   cron.schedule(
     '45 11 * * 4',
     async () => {
-      const todayLocal = new Date().toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
-      const runs = db.prepare("SELECT started_at FROM runs WHERE kind = 'weekly' ORDER BY id DESC LIMIT 5").all() as { started_at: string }[];
-      const ranToday = runs.some((r) => new Date(r.started_at).toLocaleDateString('en-CA', { timeZone: tz }) === todayLocal);
-      if (ranToday) return;
+      if (ranWeeklyToday(tz)) return;
       logEvent('warn', 'Thursday research run has not completed by 11:45');
       await notify('Thursday research did not run', 'No picks were proposed today. Open the "Thursday football picks" task in Claude and check for a stuck permission prompt, or click Run now.', { priority: 'high', tags: 'warning' });
     },

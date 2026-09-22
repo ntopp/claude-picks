@@ -50,7 +50,7 @@ The dashboard installs as an app (Add to Home Screen) and is laid out for a phon
 
 | When | What |
 |---|---|
-| Thu 8:30 AM | Lines are up and Wednesday practice reports are in. A scheduled Claude Code task runs the session flow (packet → research → propose) and pushes the picks to your phone. Or run a scan yourself from the Runs tab. |
+| Thu 8:30 AM | Lines are up and Wednesday practice reports are in. You get a push; open the project in Claude and ask for this week's picks (packet → research → propose → publish). With `ANTHROPIC_API_KEY` set and autoScan on, the server does it itself instead. |
 | Thu–Sat | Execute or Pass each proposal, with a note if you like. Line movement since the pick is shown on the card. |
 | Thu–Mon | Games play; the server grades as they finish. Picks tab shows live scores on your open bets. |
 | Mon 8:00 AM | Lines-only snapshot of the next slate; public page refreshed with the weekend's results. |
