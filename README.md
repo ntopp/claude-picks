@@ -44,7 +44,7 @@ The dashboard installs as an app (Add to Home Screen) and is laid out for a phon
 
 ## Public page for friends
 
-`npm run publish` renders a read-only page — this week's picks with reasoning, the board, the season scoreboard, prior weeks collapsed — to `docs/index.html` and pushes it; GitHub Pages serves it (Settings → Pages → Deploy from branch → main, /docs). It publishes itself Thursday after the picks and Monday morning after the weekend grades. Set `PAGES_URL` in `.env` and a `NTFY_FRIENDS_TOPIC`; anyone who subscribes to that topic in the ntfy app gets a "picks are up" / "results are in" push with the link, and nothing else.
+`npm run publish` renders a read-only page — this week's picks with reasoning, the board, the season scoreboard, prior weeks collapsed — to `docs/index.html` and pushes it; GitHub Pages serves it (Settings → Pages → Deploy from branch → main, /docs). It publishes itself Thursday after the picks, again whenever a pick or board lean settles (at most every 20 minutes, no push), and Monday morning after the weekend grades. Set `PAGES_URL` in `.env` and a `NTFY_FRIENDS_TOPIC`; anyone who subscribes to that topic in the ntfy app gets a "picks are up" / "results are in" push with the link, and nothing else.
 
 ## Weekly workflow
 

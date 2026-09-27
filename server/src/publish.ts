@@ -170,7 +170,8 @@ export async function publish(opts: { reason: 'picks' | 'results' | 'manual'; no
   const git = (...args: string[]) => execFileSync('git', args, { cwd: config.repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   try {
     git('add', 'docs');
-    git('commit', '-q', '-m', `Publish page (${opts.reason})`);
+    // Commit only docs/, so an automated publish never sweeps up anything else that happens to be staged.
+    git('commit', '-q', '-m', `Publish page (${opts.reason})`, '--', 'docs');
     git('push', '-q');
   } catch (e) {
     logEvent('warn', `Publish: git failed: ${(e as Error).message.split('\n')[0]}`);
@@ -184,4 +185,28 @@ export async function publish(opts: { reason: 'picks' | 'results' | 'manual'; no
     else if (opts.reason === 'results') void notifyFriends('Weekend results', `Season: ${rec}, ${units(sb.engine.net)}${sb.pending || unsettledCount() ? ' (Monday night still open)' : ''}. ${config.pagesUrl}`);
   }
   return true;
+}
+
+// ---- auto-publish after grading ----------------------------------------------
+
+const AUTO_PUBLISH_GAP_MS = 20 * 60_000;
+let lastAutoPublish = 0;
+let autoPublishDue = false;
+
+/**
+ * Called after every grading pass. When a pick or board lean settled, refresh the public page — at most
+ * once every 20 minutes, so a busy Saturday is a handful of commits, not dozens. A change that lands inside
+ * the gap is remembered and published on a later pass. No friends push: that stays on Thursday (picks) and
+ * Monday (results).
+ */
+export async function autoPublishAfterGrading(r: { graded: number; leansGraded: number }): Promise<void> {
+  if (r.graded || r.leansGraded) autoPublishDue = true;
+  if (!autoPublishDue || Date.now() - lastAutoPublish < AUTO_PUBLISH_GAP_MS) return;
+  lastAutoPublish = Date.now();
+  autoPublishDue = false;
+  try {
+    await publish({ reason: 'results', notify: false });
+  } catch (e) {
+    logEvent('warn', `Auto-publish failed: ${(e as Error).message}`);
+  }
 }

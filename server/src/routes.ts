@@ -4,6 +4,7 @@ import { db, expireStaleProposals, getGame, getProposal, getSettings, listPropos
 import { runApiScan } from './engine/run.js';
 import { syncAndGrade } from './grading.js';
 import { notifyEnabled } from './notify.js';
+import { autoPublishAfterGrading } from './publish.js';
 import { buildPacket, renderPacketMarkdown } from './slate.js';
 import { computeScoreboard } from './stats.js';
 import { buildReview } from './review.js';
@@ -195,7 +196,9 @@ api.post('/scan', (req, res) => {
 
 api.post('/grade', async (_req, res, next) => {
   try {
-    res.json(await syncAndGrade());
+    const r = await syncAndGrade();
+    res.json(r);
+    void autoPublishAfterGrading(r); // after the response: a git push takes a few seconds
   } catch (e) {
     next(e);
   }

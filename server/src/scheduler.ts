@@ -5,7 +5,7 @@ import { runApiScan } from './engine/run.js';
 import { gameInProgress, syncAndGrade } from './grading.js';
 import { buildPacket } from './slate.js';
 import { runApiReview } from './review.js';
-import { publish } from './publish.js';
+import { autoPublishAfterGrading, publish } from './publish.js';
 import { notify } from './notify.js';
 
 /**
@@ -35,6 +35,7 @@ export function startScheduler() {
       try {
         const r = await syncAndGrade();
         if (r.graded) console.log(`[grade] refreshed ${r.refreshed} games, graded ${r.graded}`);
+        await autoPublishAfterGrading(r);
       } catch (e) {
         logEvent('warn', `Scheduled grading failed: ${(e as Error).message}`);
       }
@@ -116,5 +117,11 @@ export function startScheduler() {
   );
 
   // Catch up once on boot so a machine that was asleep through Sunday grades on startup.
-  setTimeout(() => void syncAndGrade().catch((e) => logEvent('warn', `Boot grading failed: ${(e as Error).message}`)), 3000);
+  setTimeout(
+    () =>
+      void syncAndGrade()
+        .then(autoPublishAfterGrading)
+        .catch((e) => logEvent('warn', `Boot grading failed: ${(e as Error).message}`)),
+    3000,
+  );
 }
