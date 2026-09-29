@@ -39,7 +39,8 @@ export const BoardEntrySchema = z.object({
   game_id: z.string().min(1),
   /** The side you would take if forced, in market terms: "BUF -4.5", "Under 53.5", "DET ML", or "no lean". */
   lean: z.string().max(40),
-  confidence: z.number().int().min(1).max(10),
+  /** 1-10 for a real lean. null for "no lean": a pass has no strength, and any number sent with one is dropped. */
+  confidence: z.number().int().min(1).max(10).nullable(),
   note: z.string().max(300),
 });
 export type BoardEntry = z.infer<typeof BoardEntrySchema>;

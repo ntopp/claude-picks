@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS game_views (
   run_id INTEGER REFERENCES runs(id),
   updated_at TEXT NOT NULL,
   lean TEXT NOT NULL,
-  confidence INTEGER NOT NULL,
+  confidence INTEGER, -- 1-10; NULL when the lean is "no lean" (a pass has no strength)
   note TEXT NOT NULL
 );
 
@@ -136,7 +136,7 @@ CREATE TABLE IF NOT EXISTS game_view_history (
   run_id INTEGER REFERENCES runs(id),
   ts TEXT NOT NULL,
   lean TEXT NOT NULL,
-  confidence INTEGER NOT NULL,
+  confidence INTEGER, -- NULL for "no lean"
   note TEXT NOT NULL,
   market TEXT, side TEXT, line REAL, price INTEGER,
   result TEXT, margin REAL, graded_at TEXT
@@ -175,6 +175,45 @@ for (const [table, column, ddl] of [
   const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
   if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
 }
+
+// Board confidence became optional ("no lean" has no strength). SQLite cannot drop NOT NULL in place,
+// so older databases rebuild the two view tables once, then blank the confidence on every "no lean".
+const VIEW_COLS = 'lean, confidence, note, market, side, line, price, result, margin, graded_at';
+const VIEW_REBUILDS: Record<string, { ddl: string; cols: string; index?: string }> = {
+  game_views: {
+    ddl: `CREATE TABLE game_views_new (
+      game_id TEXT PRIMARY KEY REFERENCES games(id), run_id INTEGER REFERENCES runs(id), updated_at TEXT NOT NULL,
+      lean TEXT NOT NULL, confidence INTEGER, note TEXT NOT NULL,
+      market TEXT, side TEXT, line REAL, price INTEGER, result TEXT, margin REAL, graded_at TEXT)`,
+    cols: `game_id, run_id, updated_at, ${VIEW_COLS}`,
+  },
+  game_view_history: {
+    ddl: `CREATE TABLE game_view_history_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, game_id TEXT NOT NULL REFERENCES games(id), run_id INTEGER REFERENCES runs(id), ts TEXT NOT NULL,
+      lean TEXT NOT NULL, confidence INTEGER, note TEXT NOT NULL,
+      market TEXT, side TEXT, line REAL, price INTEGER, result TEXT, margin REAL, graded_at TEXT)`,
+    cols: `id, game_id, run_id, ts, ${VIEW_COLS}`,
+    index: 'CREATE INDEX IF NOT EXISTS idx_view_history_game ON game_view_history(game_id, ts)',
+  },
+};
+for (const [table, r] of Object.entries(VIEW_REBUILDS)) {
+  const conf = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string; notnull: number }[]).find((c) => c.name === 'confidence');
+  if (!conf?.notnull) continue;
+  db.exec('BEGIN');
+  try {
+    db.exec(r.ddl);
+    db.exec(`INSERT INTO ${table}_new (${r.cols}) SELECT ${r.cols} FROM ${table}`);
+    db.exec(`DROP TABLE ${table}`);
+    db.exec(`ALTER TABLE ${table}_new RENAME TO ${table}`);
+    if (r.index) db.exec(r.index);
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+}
+db.exec(`UPDATE game_views SET confidence = NULL WHERE lean = 'no lean' AND confidence IS NOT NULL`);
+db.exec(`UPDATE game_view_history SET confidence = NULL WHERE lean = 'no lean' AND confidence IS NOT NULL`);
 
 export const nowIso = () => new Date().toISOString();
 

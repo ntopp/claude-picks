@@ -120,8 +120,8 @@ api.post('/board/:gameId/execute', (req, res) => {
   const g = getGame(req.params.gameId);
   if (!g) return res.status(404).json({ error: 'No such game' });
   if (g.status !== 'scheduled' || new Date(g.kickoff).getTime() < Date.now()) return res.status(400).json({ error: 'Game already kicked off' });
-  const view = db.prepare('SELECT * FROM game_views WHERE game_id = ?').get(g.id) as { run_id: number | null; lean: string; confidence: number; note: string } | undefined;
-  if (!view) return res.status(400).json({ error: 'No lean on this game' });
+  const view = db.prepare('SELECT * FROM game_views WHERE game_id = ?').get(g.id) as { run_id: number | null; lean: string; confidence: number | null; note: string } | undefined;
+  if (!view || view.confidence === null) return res.status(400).json({ error: 'No lean on this game' });
   if (db.prepare(`SELECT id FROM proposals WHERE game_id = ? AND status != 'void'`).get(g.id)) return res.status(400).json({ error: 'There is already a pick on this game' });
   const lines: Lines | null = g.lines_json ? (JSON.parse(g.lines_json) as Lines) : null;
   if (!lines) return res.status(400).json({ error: 'No current line for this game' });

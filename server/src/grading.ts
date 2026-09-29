@@ -119,7 +119,7 @@ export function backfillLeanBets(resolve: (lean: string, g: { home_abbr: string;
        FROM game_views v JOIN games g ON g.id = v.game_id
        WHERE v.market IS NULL AND v.lean != 'no lean'`,
     )
-    .all() as { game_id: string; run_id: number | null; updated_at: string; lean: string; confidence: number; note: string; home_abbr: string; away_abbr: string; lines_json: string | null; snap_before: string | null; snap_first: string | null }[];
+    .all() as { game_id: string; run_id: number | null; updated_at: string; lean: string; confidence: number | null; note: string; home_abbr: string; away_abbr: string; lines_json: string | null; snap_before: string | null; snap_first: string | null }[];
   let n = 0;
   for (const r of rows) {
     const src = r.snap_before ?? r.snap_first ?? r.lines_json;

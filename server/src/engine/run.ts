@@ -133,10 +133,13 @@ export function upsertViews(runId: number | null, packet: Packet, board: BoardEn
   for (const b of board) {
     const g = games.get(b.game_id);
     if (!g) continue;
-    const lean = b.lean.trim() || 'no lean';
-    const bet = resolveLean(lean, { home_abbr: g.home.abbr, away_abbr: g.away.abbr }, g.lines);
+    // A lean with no strength is not a read we can calibrate, so it is recorded as "no lean";
+    // and "no lean" never carries a confidence, whatever number came with it.
+    const lean = b.lean.trim() && b.confidence !== null ? b.lean.trim() : 'no lean';
+    const confidence = lean.toLowerCase() === 'no lean' ? null : b.confidence;
+    const bet = confidence === null ? null : resolveLean(lean, { home_abbr: g.home.abbr, away_abbr: g.away.abbr }, g.lines);
     const ts = nowIso();
-    const args = [b.game_id, runId, ts, lean, b.confidence, b.note.trim(), bet?.market ?? null, bet?.side ?? null, bet?.line ?? null, bet?.price ?? null] as const;
+    const args = [b.game_id, runId, ts, confidence === null ? 'no lean' : lean, confidence, b.note.trim(), bet?.market ?? null, bet?.side ?? null, bet?.line ?? null, bet?.price ?? null] as const;
     latest.run(...args);
     history.run(...args);
     n++;

@@ -78,7 +78,7 @@ function boardHtml(games: SlateGame[]) {
       const pick = g.proposal ? `<span class="badge ${g.proposal.result ?? g.proposal.status}">${g.proposal.result ?? g.proposal.status}</span> <span class="small">${esc(g.proposal.pick)}</span>` : '';
       const leanLink = g.view && g.status === 'scheduled' && new Date(g.kickoff).getTime() > Date.now() ? leanBetLink(g.view.lean, g) : null;
       const note = g.view?.note || leanLink ? `<tr><td colspan="7" class="note">${esc(g.view?.note ?? '')}${leanLink ? ` <a class="book" href="${esc(leanLink)}" target="_blank" rel="noopener noreferrer">DraftKings ↗</a>` : ''}</td></tr>` : '';
-      return `<tr class="${g.proposal ? 'has-pick' : ''}"><td class="muted">${g.status === 'final' ? 'Final' : g.status === 'in_progress' ? 'Live' : when(g.kickoff)}</td><td>${team(g.away)} ${g.neutral ? 'vs' : '@'} ${team(g.home)}${sc}</td><td class="mono">${spread(g)}</td><td class="mono">${g.lines?.total ?? '–'}</td><td>${esc(g.view?.lean ?? '–')}</td><td>${g.view ? `${confBar(g.view.confidence ?? 0)} <span class="muted small">${g.view.confidence}</span>` : '–'}</td><td>${pick}</td></tr>${note}`;
+      return `<tr class="${g.proposal ? 'has-pick' : ''}"><td class="muted">${g.status === 'final' ? 'Final' : g.status === 'in_progress' ? 'Live' : when(g.kickoff)}</td><td>${team(g.away)} ${g.neutral ? 'vs' : '@'} ${team(g.home)}${sc}</td><td class="mono">${spread(g)}</td><td class="mono">${g.lines?.total ?? '–'}</td><td>${esc(g.view?.lean ?? '–')}</td><td>${g.view && g.view.confidence !== null ? `${confBar(g.view.confidence)} <span class="muted small">${g.view.confidence}</span>` : '<span class="muted">–</span>'}</td><td>${pick}</td></tr>${note}`;
     })
     .join('')}</tbody></table></div>`;
 }
