@@ -144,6 +144,7 @@ ${bucketRow('All picks', sb.engine)}
 ${Object.entries(sb.byLeague).map(([k, b]) => bucketRow(label(k), b)).join('')}
 ${Object.entries(sb.byMarket).map(([k, b]) => bucketRow(label(k), b)).join('')}
 ${Object.entries(sb.byEdge).map(([k, b]) => bucketRow(`Edge: ${label(k)}`, b)).join('')}
+${Object.entries(sb.byRole).map(([k, b]) => bucketRow(k, b)).join('')}
 ${Object.entries(sb.byConfidence).map(([k, b]) => bucketRow(`Confidence ${k}`, b)).join('')}
 </tbody></table></div>
 <p class="muted small">CLV = closing line value: how many points better the pick's number was than where the market closed. Consistently positive CLV is the earliest real evidence of edge; win rate takes hundreds of bets to mean anything.</p></div>

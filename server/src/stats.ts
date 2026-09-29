@@ -6,7 +6,7 @@
  * Break-even at -110 is 52.38%.
  */
 import { db, getSettings, type ProposalRow } from './db.js';
-import { breakEvenRate, netUnits, settle, type Lines } from './odds.js';
+import { breakEvenRate, netUnits, roleOf, settle, type Lines } from './odds.js';
 import type { Market, Side } from './engine/schema.js';
 
 export type Bucket = {
@@ -69,6 +69,19 @@ function groupBy(rows: ScoredRow[], key: (p: ProposalRow) => string): Record<str
 
 const confBucket = (c: number) => (c >= 8 ? '8+' : String(c));
 
+/** Group by underdog/favorite, dropping totals; dogs first so the tables read the same everywhere. */
+function byRoleOf<T>(rows: T[], role: (r: T) => string | null, score: (rs: T[]) => Bucket): Record<string, Bucket> {
+  const order = ['Underdog', 'Favorite', "Pick'em"];
+  const m = new Map<string, T[]>();
+  for (const r of rows) {
+    const k = role(r);
+    if (!k) continue;
+    if (!m.has(k)) m.set(k, []);
+    m.get(k)!.push(r);
+  }
+  return Object.fromEntries(order.filter((k) => m.has(k)).map((k) => [k, score(m.get(k)!)]));
+}
+
 // ---- board leans ------------------------------------------------------------
 
 type LeanRow = { game_id: string; league: string; confidence: number; market: Market; side: Side; line: number | null; price: number; result: 'win' | 'loss' | 'push' };
@@ -92,6 +105,8 @@ export type LeanStats = {
   byConfidence: { label: string; bucket: Bucket }[];
   byLeague: Record<string, Bucket>;
   byMarket: Record<string, Bucket>;
+  /** Spread and moneyline leans split underdog vs favorite (totals excluded). */
+  byRole: Record<string, Bucket>;
   /** Leans at the pick threshold (5+) but not proposed as picks: the engine's "almost" pile. */
   wouldBePicks: Bucket;
 };
@@ -121,6 +136,7 @@ function leanStats(): LeanStats {
     byConfidence: order.filter((k) => byConf.has(k)).map((k) => ({ label: `conf ${k}`, bucket: bucket(byConf.get(k)!.map(leanScore)) })),
     byLeague: grp((l) => l.league),
     byMarket: grp((l) => l.market),
+    byRole: byRoleOf(leans, (l) => roleOf(l.market, l.line, l.price), (ls) => bucket(ls.map(leanScore))),
     wouldBePicks: bucket(leans.filter((l) => l.confidence >= 5 && !picked.has(l.game_id)).map(leanScore)),
   };
 }
@@ -191,6 +207,8 @@ export type Scoreboard = {
   byLeague: Record<string, Bucket>;
   byMarket: Record<string, Bucket>;
   byEdge: Record<string, Bucket>;
+  /** Spread and moneyline picks split underdog vs favorite (totals excluded). */
+  byRole: Record<string, Bucket>;
   byConfidence: Record<string, Bucket>;
   byWeek: { key: string; label: string; engine: Bucket; human: Bucket }[];
   series: { id: number; kickoff: string; pick: string; result: string; executed: boolean; engineCum: number; humanCum: number }[];
@@ -257,6 +275,7 @@ export function computeScoreboard(): Scoreboard {
     byLeague: groupBy(engine, (p) => p.league),
     byMarket: groupBy(engine, (p) => p.market),
     byEdge: groupBy(engine, (p) => p.edge_type),
+    byRole: byRoleOf(engine, (r) => roleOf(r.row.market, r.row.line, r.row.price), bucket),
     byConfidence: groupBy(engine, (p) => confBucket(p.confidence)),
     byWeek,
     series,

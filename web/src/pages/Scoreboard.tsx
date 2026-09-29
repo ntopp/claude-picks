@@ -170,6 +170,19 @@ export function ScoreboardPage() {
         <BucketTable title="By confidence (calibration)" rows={Object.entries(sb.byConfidence).map(([k, b]) => [`conf ${k}`, b])} breakEven={be} />
       </div>
 
+      <BucketTable
+        title="Underdog vs favorite (spreads and moneylines; totals left out)"
+        rows={[
+          ...Object.entries(sb.byRole).map(([k, b]) => [`Picks: ${k}`, b] as [string, Bucket]),
+          ...Object.entries(sb.leans.byRole).map(([k, b]) => [`Leans: ${k}`, b] as [string, Bucket]),
+          ...['Road underdog +pts', 'Home underdog +pts', 'Every favorite -pts'].filter((k) => sb.baselines[k]).map((k) => [`Baseline: ${k}`, sb.baselines[k]] as [string, Bucket]),
+        ]}
+        breakEven={be}
+      />
+      <p className="muted small" style={{ marginTop: -4 }}>
+        Most picks so far have been underdogs. If that lean is real edge, the dog picks should beat the dog baselines and carry positive CLV; if they only match the baselines, it is a taste for points, not an edge.
+      </p>
+
       {sb.byWeek.length > 0 && (
         <div className="card">
           <h2>By week</h2>

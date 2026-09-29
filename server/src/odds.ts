@@ -103,3 +103,13 @@ export function pickLabel(market: Market, side: Side, line: number | null, price
   if (market === 'total') return `${side === 'over' ? 'Over' : 'Under'} ${line} (${fmtPrice(price)})`;
   return `${team} ML ${fmtPrice(price)}`;
 }
+
+/**
+ * Underdog or favorite, from the picked side's own number: a positive spread (or a plus-money moneyline)
+ * is the dog. Totals have no favorite and return null, so they sit out of this split.
+ */
+export function roleOf(market: Market, line: number | null, price: number): 'Underdog' | 'Favorite' | "Pick'em" | null {
+  if (market === 'total') return null;
+  if (market === 'spread') return line === null || line === 0 ? "Pick'em" : line > 0 ? 'Underdog' : 'Favorite';
+  return price > 0 ? 'Underdog' : 'Favorite';
+}

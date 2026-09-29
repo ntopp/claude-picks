@@ -93,6 +93,7 @@ export type LeanStats = {
   byConfidence: { label: string; bucket: Bucket }[];
   byLeague: Record<string, Bucket>;
   byMarket: Record<string, Bucket>;
+  byRole: Record<string, Bucket>;
   wouldBePicks: Bucket;
 };
 
@@ -114,6 +115,7 @@ export type Scoreboard = {
   byLeague: Record<string, Bucket>;
   byMarket: Record<string, Bucket>;
   byEdge: Record<string, Bucket>;
+  byRole: Record<string, Bucket>;
   byConfidence: Record<string, Bucket>;
   byWeek: { key: string; label: string; engine: Bucket; human: Bucket }[];
   series: { id: number; kickoff: string; pick: string; result: string; executed: boolean; engineCum: number; humanCum: number }[];

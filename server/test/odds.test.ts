@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { closingLineValue, impliedProb, netUnits, pickedFrom, profitOnWin, settle, type Lines } from '../src/odds.js';
+import { closingLineValue, impliedProb, netUnits, pickedFrom, profitOnWin, roleOf, settle, type Lines } from '../src/odds.js';
 
 const lines: Lines = { provider: 'DK', spreadHome: -4.5, spreadHomePrice: -112, spreadAwayPrice: -108, total: 53.5, overPrice: -120, underPrice: 100, mlHome: -218, mlAway: 180 };
 
@@ -56,4 +56,13 @@ test('closing line value is positive when we beat the close', () => {
   // Took DET +200, closed +180 -> market moved toward us: positive prob points.
   const ml = closingLineValue('moneyline', 'away', null, 200, lines)!;
   assert.ok(ml > 2 && ml < 3, `got ${ml}`);
+});
+
+test('underdog vs favorite comes from the picked side', () => {
+  assert.equal(roleOf('spread', 7, -115), 'Underdog');
+  assert.equal(roleOf('spread', -3.5, -105), 'Favorite');
+  assert.equal(roleOf('spread', 0, -110), "Pick'em");
+  assert.equal(roleOf('moneyline', null, 150), 'Underdog');
+  assert.equal(roleOf('moneyline', null, -180), 'Favorite');
+  assert.equal(roleOf('total', 43.5, -110), null);
 });
