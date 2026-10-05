@@ -8,6 +8,8 @@ Everything is paper. "Execute" logs a bet in the DB; nothing is ever placed with
 
 When the user asks for picks / a slate / proposals from a session (no `ANTHROPIC_API_KEY`):
 
+**Shortcut (and the only commands the scheduled tasks run):** `npm run picks:start` writes the packet to `data/packet-latest.md`; read it, research, write `data/response.json`; then `npm run picks:finish -- --model <id>` does steps 5-6 below in one go. For the Tuesday review: `npm run review:start` (grades, writes `data/review-packet.md`), write `data/review.json`, `npm run review:finish`. Run them bare — no `cd`, pipes or redirects — so they match the pre-approved `npm run *` permission and an unattended run never stalls on a prompt. The longer form below is the same flow with more knobs.
+
 1. `npm run packet` — prints the weekly packet (markdown) for both leagues and writes `data/packet-latest.json`. `--league nfl` or `--league cfb` for one; `--week N` to override; `--all-detail` to enrich every college game; `--no-detail` for lines only.
 2. Read `server/src/engine/prompt.ts` first — the `PLAYBOOK` is the strategy. Then reason. **Use WebSearch/WebFetch**: this week's injury reports and practice participation, kickoff-time weather for outdoor games, coaching/QB changes, beat-writer news. The packet has lines, movement, ESPN injuries, last five, FPI — the edge is in what it does not have.
 3. Write the honest bear case for each idea first; if it wins, put the game in `passes`. In session mode you are also the red team (`RED_TEAM` in `prompt.ts`): apply that scrutiny to your own list before saving.

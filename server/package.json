@@ -15,7 +15,11 @@
     "test": "tsx --test test/*.test.ts",
     "notify:test": "tsx scripts/notify-test.ts",
     "publish": "tsx scripts/publish.ts",
-    "engine:check": "tsx scripts/engine-check.ts"
+    "engine:check": "tsx scripts/engine-check.ts",
+    "picks:start": "tsx scripts/session.ts picks-start",
+    "picks:finish": "tsx scripts/session.ts picks-finish",
+    "review:start": "tsx scripts/session.ts review-start",
+    "review:finish": "tsx scripts/session.ts review-finish"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",

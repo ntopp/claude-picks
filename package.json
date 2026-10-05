@@ -22,7 +22,11 @@
     "stop": "node scripts/stop.mjs",
     "notify:test": "npm run notify:test --workspace=server --",
     "publish": "npm run publish --workspace=server --",
-    "engine:check": "npm run engine:check --workspace=server --"
+    "engine:check": "npm run engine:check --workspace=server --",
+    "picks:start": "npm run picks:start --workspace=server --",
+    "picks:finish": "npm run picks:finish --workspace=server --",
+    "review:start": "npm run review:start --workspace=server --",
+    "review:finish": "npm run review:finish --workspace=server --"
   },
   "allowScripts": {
     "esbuild@0.28.2": true
