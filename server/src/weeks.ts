@@ -146,9 +146,18 @@ export async function weekTabs(): Promise<WeekTab[]> {
       pending: 0,
     });
   }
+  // Attach each college week to the NFL week whose window contains its MEDIAN kickoff — the weekend most of
+  // its games are played. Not the first kickoff: college weeks often open with a Tuesday or Wednesday game
+  // that falls inside the previous NFL window (CFB 6 opened Tue Oct 6, before NFL week 4's window closed),
+  // which used to pull the whole week back a slot and hide the week before it.
+  const kicks = db.prepare(`SELECT season, week, kickoff FROM games WHERE league = 'cfb' ORDER BY kickoff`).all() as { season: number; week: number; kickoff: string }[];
+  const medianKick = (season: number, week: number) => {
+    const ks = kicks.filter((k) => k.season === season && k.week === week).map((k) => k.kickoff);
+    return ks[Math.floor((ks.length - 1) / 2)];
+  };
   for (const r of rows.filter((r) => r.league === 'cfb')) {
-    // Attach to the NFL week whose window contains the college week's first kickoff.
-    const host = [...tabs.values()].find((t) => t.nfl && r.first >= t.start && r.first < t.end);
+    const mid = medianKick(r.season, r.week) ?? r.first;
+    const host = [...tabs.values()].find((t) => t.nfl && !t.cfb && mid >= t.start && mid < t.end);
     if (host) {
       host.cfb = { season: r.season, week: r.week };
       host.sublabel = `NFL ${host.nfl!.week} · CFB ${r.week}`;
