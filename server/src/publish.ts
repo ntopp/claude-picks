@@ -157,7 +157,8 @@ function unsettledCount(): number {
 }
 
 /** Write docs/index.html; commit and push if it changed. Returns true when a new version went out. */
-export async function publish(opts: { reason: 'picks' | 'results' | 'manual'; notify?: boolean } = { reason: 'manual' }): Promise<boolean> {
+/** `title` overrides the friends-push title for a picks publish (e.g. "College picks are up" from the Friday run). */
+export async function publish(opts: { reason: 'picks' | 'results' | 'manual'; notify?: boolean; title?: string } = { reason: 'manual' }): Promise<boolean> {
   const docs = path.join(config.repoRoot, 'docs');
   fs.mkdirSync(docs, { recursive: true });
   fs.writeFileSync(path.join(docs, '.nojekyll'), '');
@@ -182,7 +183,7 @@ export async function publish(opts: { reason: 'picks' | 'results' | 'manual'; no
   if (opts.notify && config.pagesUrl) {
     const sb = computeScoreboard();
     const rec = `${sb.engine.wins}-${sb.engine.losses}${sb.engine.pushes ? `-${sb.engine.pushes}` : ''}`;
-    if (opts.reason === 'picks') void notifyFriends("This week's picks are up", `Season: ${rec}, ${units(sb.engine.net)}. Picks, reasoning and the board: ${config.pagesUrl}`);
+    if (opts.reason === 'picks') void notifyFriends(opts.title ?? "This week's picks are up", `Season: ${rec}, ${units(sb.engine.net)}. Picks, reasoning and the board: ${config.pagesUrl}`);
     else if (opts.reason === 'results') void notifyFriends('Weekend results', `Season: ${rec}, ${units(sb.engine.net)}${sb.pending || unsettledCount() ? ' (Monday night still open)' : ''}. ${config.pagesUrl}`);
   }
   return true;

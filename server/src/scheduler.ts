@@ -116,6 +116,19 @@ export function startScheduler() {
     { timezone: tz },
   );
 
+  // Friday noon: the college run (the "Friday college picks" desktop task) should have landed. The API engine
+  // does both leagues on Thursday, so this only applies on the session path.
+  cron.schedule(
+    '45 11 * * 5',
+    async () => {
+      if (getSettings().autoScan && hasAnthropicKey()) return;
+      if (ranWeeklyToday(tz)) return;
+      logEvent('warn', 'Friday college run has not completed by 11:45');
+      await notify('College picks did not run', 'No college picks were proposed today. Open the "Friday college picks" task in Claude and check for a stuck permission prompt, or click Run now.', { priority: 'high', tags: 'warning' });
+    },
+    { timezone: tz },
+  );
+
   // Catch up once on boot so a machine that was asleep through Sunday grades on startup.
   setTimeout(
     () =>

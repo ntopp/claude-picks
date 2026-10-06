@@ -50,7 +50,8 @@ The dashboard installs as an app (Add to Home Screen) and is laid out for a phon
 
 | When | What |
 |---|---|
-| Thu 8:30 AM | Lines are up and Wednesday practice reports are in. You get a push; open the project in Claude and ask for this week's picks (packet → research → propose → publish). With `ANTHROPIC_API_KEY` set and autoScan on, the server does it itself instead. |
+| Thu 8:30 AM | NFL picks: lines are up and Wednesday practice reports are in. The "Thursday NFL picks" desktop task runs packet → research → propose → publish; without it, ask a session for this week's picks. With `ANTHROPIC_API_KEY` set and autoScan on, the server does it itself instead. |
+| Fri 8:30 AM | College picks: the "Friday college picks" task does the same for FBS, with full detail on every game and its own research budget. A push warns at 11:45 if it has not landed. |
 | Thu–Sat | Execute or Pass each proposal, with a note if you like. Line movement since the pick is shown on the card. |
 | Thu–Mon | Games play; the server grades as they finish. Picks tab shows live scores on your open bets. |
 | Mon 8:00 AM | Lines-only snapshot of the next slate; public page refreshed with the weekend's results. |

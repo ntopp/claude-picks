@@ -2,7 +2,7 @@
  * The weekly session jobs as single commands, so a scheduled Claude Code session only ever runs bare
  * `npm run <name>` commands (pre-approved) and reads/writes files in data/ — no pipes, redirects or cd.
  *
- *   npm run picks:start                         -> data/packet-latest.md (+ .json): the weekly packet to read
+ *   npm run picks:start [-- --league nfl|cfb]   -> data/packet-latest.md (+ .json): the weekly packet to read
  *   npm run picks:finish -- --model <id>        -> data/response.json through the rails, then publish + friends push
  *                           [--kind adhoc]         (default kind weekly)
  *   npm run review:start                        -> grade everything, then data/review-packet.md to read
@@ -12,7 +12,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { config } from '../src/config.js';
+import { config, LEAGUES, type League } from '../src/config.js';
 import { logEvent } from '../src/db.js';
 import { recordSessionSlate, type RunKind } from '../src/engine/run.js';
 import { SlateResponseSchema } from '../src/engine/schema.js';
@@ -34,7 +34,12 @@ const fail = (msg: string): never => {
 };
 
 async function picksStart() {
-  const packet = await buildPacket({});
+  // --league nfl | cfb for one league (the Thursday task is NFL, the Friday task college). College always gets
+  // full detail on every game: ESPN carries no college injury data, so the rest has to come from research.
+  const leagueArg = flag('--league');
+  if (leagueArg && !LEAGUES.includes(leagueArg as League)) fail(`unknown league ${leagueArg} (use nfl or cfb)`);
+  const leagues = leagueArg ? [leagueArg as League] : LEAGUES;
+  const packet = await buildPacket({ leagues, detailAll: leagues.includes('cfb') });
   const md = renderPacketMarkdown(packet, config.displayTz);
   fs.writeFileSync(data('packet-latest.json'), JSON.stringify(packet, null, 2));
   fs.writeFileSync(data('packet-latest.md'), md);
@@ -54,8 +59,10 @@ async function picksFinish() {
   const result = recordSessionSlate(kind, packet, parsed.data!, model);
   console.log(`Run #${result.runId}: ${result.inserted.length} pick(s) inserted, ${result.dropped.length} dropped.`);
   for (const d of result.dropped) console.log(`  dropped ${d.pick}: ${d.reason}`);
-  // The friends push ("picks are up") only when there is something new to look at.
-  const changed = await publish({ reason: 'picks', notify: result.inserted.length > 0 });
+  // The friends push ("picks are up") only when there is something new to look at, named by league.
+  const only = packet.leagues.length === 1 ? packet.leagues[0].league : null;
+  const title = only === 'cfb' ? 'College picks are up' : only === 'nfl' ? 'NFL picks are up' : undefined;
+  const changed = await publish({ reason: 'picks', notify: result.inserted.length > 0, title });
   console.log(changed ? `Public page published${result.inserted.length ? ' and friends notified' : ''}.` : 'Public page unchanged.');
 }
 
