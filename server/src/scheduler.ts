@@ -15,6 +15,22 @@ import { notify } from './notify.js';
  * Thursday 08:30: the weekly API scan when autoScan is on, publishing the page and pushing when it lands.
  * Tuesday 08:30: the weekly API review. Thursday 11:45: warn if no run has happened by then.
  */
+/**
+ * The Monday snapshot is what loads next week's games. If it was missed (PC asleep at 08:00), the dashboard
+ * has no upcoming week and looks frozen until Thursday. Whenever no game is scheduled ahead, load the next
+ * slate (lines only — two ESPN requests). Runs on boot and on every grading pass.
+ */
+async function ensureUpcomingSlate(): Promise<void> {
+  const ahead = (db.prepare(`SELECT COUNT(*) AS n FROM games WHERE status = 'scheduled' AND kickoff > ?`).get(new Date().toISOString()) as { n: number }).n;
+  if (ahead > 0) return;
+  try {
+    const p = await buildPacket({ noDetail: true });
+    logEvent('info', `Loaded the upcoming slate (catch-up): ${p.leagues.map((l) => `${l.league} wk ${l.week} ${l.games.length} games`).join(', ')}`);
+  } catch (e) {
+    logEvent('warn', `Upcoming-slate catch-up failed: ${(e as Error).message}`);
+  }
+}
+
 /** Did a weekly run land today (local time)? Both Thursday jobs ask this. */
 function ranWeeklyToday(tz: string): boolean {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
@@ -36,6 +52,7 @@ export function startScheduler() {
         const r = await syncAndGrade();
         if (r.graded) console.log(`[grade] refreshed ${r.refreshed} games, graded ${r.graded}`);
         await autoPublishAfterGrading(r);
+        await ensureUpcomingSlate();
       } catch (e) {
         logEvent('warn', `Scheduled grading failed: ${(e as Error).message}`);
       }
@@ -134,6 +151,7 @@ export function startScheduler() {
     () =>
       void syncAndGrade()
         .then(autoPublishAfterGrading)
+        .then(ensureUpcomingSlate)
         .catch((e) => logEvent('warn', `Boot grading failed: ${(e as Error).message}`)),
     3000,
   );
