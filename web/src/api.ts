@@ -116,6 +116,7 @@ export type Scoreboard = {
   byMarket: Record<string, Bucket>;
   byEdge: Record<string, Bucket>;
   byRole: Record<string, Bucket>;
+  byDay: Record<string, Bucket>;
   byConfidence: Record<string, Bucket>;
   byWeek: { key: string; label: string; engine: Bucket; human: Bucket }[];
   series: { id: number; kickoff: string; pick: string; result: string; executed: boolean; engineCum: number; humanCum: number }[];

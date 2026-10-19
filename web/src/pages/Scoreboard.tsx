@@ -179,6 +179,7 @@ export function ScoreboardPage() {
         ]}
         breakEven={be}
       />
+      <BucketTable title="By pick day (Monday early-line run vs Thursday/Friday news runs)" rows={Object.entries(sb.byDay)} breakEven={be} />
       <p className="muted small" style={{ marginTop: -4 }}>
         Most picks so far have been underdogs. If that lean is real edge, the dog picks should beat the dog baselines and carry positive CLV; if they only match the baselines, it is a taste for points, not an edge.
       </p>

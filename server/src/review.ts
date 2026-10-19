@@ -109,6 +109,7 @@ export function buildReviewPacket(): string {
   for (const [k, b] of Object.entries(sb.byMarket)) md.push(row(`Market ${k}`, b));
   for (const [k, b] of Object.entries(sb.byEdge)) md.push(row(`Edge ${k}`, b));
   for (const [k, b] of Object.entries(sb.byRole)) md.push(row(`${k} (spread/ML)`, b));
+  for (const [k, b] of Object.entries(sb.byDay)) md.push(row(`Picked ${k}`, b));
   for (const [k, b] of Object.entries(sb.byConfidence)) md.push(row(`Confidence ${k}`, b));
   md.push('', `Filter verdict: ${sb.humanEdge.verdict}`, '');
 

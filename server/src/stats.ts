@@ -5,6 +5,7 @@
  * Baselines = dumb strategies on the same games at the closing line, so "+3u" has a comparison.
  * Break-even at -110 is 52.38%.
  */
+import { config } from './config.js';
 import { db, getSettings, type ProposalRow } from './db.js';
 import { breakEvenRate, netUnits, roleOf, settle, type Lines } from './odds.js';
 import type { Market, Side } from './engine/schema.js';
@@ -68,6 +69,12 @@ function groupBy(rows: ScoredRow[], key: (p: ProposalRow) => string): Record<str
 }
 
 const confBucket = (c: number) => (c >= 8 ? '8+' : String(c));
+
+/** Which run made the pick, by local weekday: Monday/Tuesday is the early-line run, the rest is news-driven. */
+function pickDay(createdAt: string): string {
+  const d = new Date(createdAt).toLocaleDateString('en-US', { weekday: 'short', timeZone: config.displayTz });
+  return d === 'Mon' || d === 'Tue' ? 'Early (Mon-Tue)' : 'Late (Wed-Sun)';
+}
 
 /** Group by underdog/favorite, dropping totals; dogs first so the tables read the same everywhere. */
 function byRoleOf<T>(rows: T[], role: (r: T) => string | null, score: (rs: T[]) => Bucket): Record<string, Bucket> {
@@ -209,6 +216,8 @@ export type Scoreboard = {
   byEdge: Record<string, Bucket>;
   /** Spread and moneyline picks split underdog vs favorite (totals excluded). */
   byRole: Record<string, Bucket>;
+  /** Picks by the weekday they were made: the Monday early-line run vs the Thursday/Friday news runs. */
+  byDay: Record<string, Bucket>;
   byConfidence: Record<string, Bucket>;
   byWeek: { key: string; label: string; engine: Bucket; human: Bucket }[];
   series: { id: number; kickoff: string; pick: string; result: string; executed: boolean; engineCum: number; humanCum: number }[];
@@ -276,6 +285,7 @@ export function computeScoreboard(): Scoreboard {
     byMarket: groupBy(engine, (p) => p.market),
     byEdge: groupBy(engine, (p) => p.edge_type),
     byRole: byRoleOf(engine, (r) => roleOf(r.row.market, r.row.line, r.row.price), bucket),
+    byDay: groupBy(engine, (p) => pickDay(p.created_at)),
     byConfidence: groupBy(engine, (p) => confBucket(p.confidence)),
     byWeek,
     series,
