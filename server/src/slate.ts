@@ -8,7 +8,14 @@ import { db, getSettings, listLessons, listProposals, nowIso, type GameRow } fro
 import { gameDetail, mapLimit, scoreboard, upcomingWeek, type GameDetail, type ScoreboardGame } from './espn.js';
 import { fmtLine, fmtPrice, type Lines } from './odds.js';
 
-export type PacketGame = ScoreboardGame & { detail: GameDetail | null };
+/** The first line this app recorded for the game (the Monday snapshot, usually), with when. ESPN's `open` is often a months-old lookahead number. */
+export type FirstSeen = { ts: string; lines: Lines } | null;
+export type PacketGame = ScoreboardGame & { detail: GameDetail | null; firstSeen: FirstSeen };
+
+function firstSeenFor(gameId: string): FirstSeen {
+  const r = db.prepare('SELECT ts, lines_json FROM line_snapshots WHERE game_id = ? ORDER BY ts ASC LIMIT 1').get(gameId) as { ts: string; lines_json: string } | undefined;
+  return r ? { ts: r.ts, lines: JSON.parse(r.lines_json) as Lines } : null;
+}
 
 export type Packet = {
   generatedAt: string;
@@ -82,12 +89,12 @@ export async function buildPacket(opts: BuildOptions = {}): Promise<Packet> {
     const games = sb.games.filter((g) => g.week === target.week || opts.week?.[league] !== undefined);
     for (const g of games) upsertGame(g);
     const enriched = await mapLimit(games, 6, async (g): Promise<PacketGame> => {
-      if (!wantsDetail(g, opts) || g.status !== 'scheduled') return { ...g, detail: null };
+      if (!wantsDetail(g, opts) || g.status !== 'scheduled') return { ...g, detail: null, firstSeen: firstSeenFor(g.id) };
       try {
-        return { ...g, detail: await gameDetail(league, g.id) };
+        return { ...g, detail: await gameDetail(league, g.id), firstSeen: firstSeenFor(g.id) };
       } catch (e) {
         console.error(`detail failed for ${g.name}: ${(e as Error).message}`);
-        return { ...g, detail: null };
+        return { ...g, detail: null, firstSeen: firstSeenFor(g.id) };
       }
     });
     out.push({ league, season: sb.season, week: target.week, games: enriched });
@@ -121,15 +128,36 @@ function linesStr(g: ScoreboardGame): string {
   return parts.join(' · ');
 }
 
-function movementStr(g: ScoreboardGame): string {
-  const o = g.open;
-  const l = g.lines;
-  if (!o || !l) return '';
+const sameLines = (a: Lines, b: Lines) => a.spreadHome === b.spreadHome && a.total === b.total && a.mlHome === b.mlHome;
+const shortDay = (iso: string, tz: string) => new Date(iso).toLocaleDateString('en-US', { timeZone: tz, weekday: 'short', month: 'numeric', day: 'numeric' });
+
+/** Movement from a reference line to now, or '' when nothing moved. */
+function moveParts(g: ScoreboardGame, o: Lines, l: Lines): string {
   const parts: string[] = [];
   if (o.spreadHome !== null && l.spreadHome !== null && o.spreadHome !== l.spreadHome) parts.push(`spread ${g.home.abbr} ${fmtLine(o.spreadHome)} → ${fmtLine(l.spreadHome)}`);
   if (o.total !== null && l.total !== null && o.total !== l.total) parts.push(`total ${o.total} → ${l.total}`);
   if (o.mlHome !== null && l.mlHome !== null && o.mlHome !== l.mlHome) parts.push(`ML ${g.home.abbr} ${fmtPrice(o.mlHome)} → ${fmtPrice(l.mlHome)}`);
   return parts.join('; ');
+}
+
+/**
+ * Two labelled reference points. "since <day>" is the move from the first line this app recorded, the
+ * number the engine can trust as this week's opener. "lookahead" is ESPN's reported opener, which for
+ * college is often a summer number, so a move from it is not information; shown only when it differs.
+ */
+function movementStr(g: PacketGame, tz: string): string {
+  const l = g.lines;
+  if (!l) return '';
+  const out: string[] = [];
+  if (g.firstSeen) {
+    const m = moveParts(g, g.firstSeen.lines, l);
+    out.push(m ? `since ${shortDay(g.firstSeen.ts, tz)}: ${m}` : `unchanged since ${shortDay(g.firstSeen.ts, tz)}`);
+  }
+  if (g.open && !(g.firstSeen && sameLines(g.open, g.firstSeen.lines))) {
+    const m = moveParts(g, g.open, l);
+    if (m) out.push(`lookahead: ${m}`);
+  }
+  return out.join(' · ');
 }
 
 const teamLabel = (t: ScoreboardGame['home']) => `${t.rank ? `#${t.rank} ` : ''}${t.name} (${t.abbr}${t.record ? ` ${t.record}` : ''})`;
@@ -141,7 +169,7 @@ export function renderPacketMarkdown(p: Packet, tz = 'America/Chicago'): string 
   md.push(
     `Rails: default stake ${p.settings.defaultUnits}u, max ${p.settings.maxUnitsPerBet}u per bet, max ${p.settings.maxPicksPerWeek} picks this week across both leagues, ` +
       `confidence < ${p.settings.minConfidence} is dropped, moneyline favorites shorter than ${p.settings.maxFavoritePrice} are dropped. ` +
-      `Prices are DraftKings via ESPN. Spread lines are shown from the FAVORITE's side; when you propose, give the PICKED team's own line.`,
+      `Prices are DraftKings via ESPN. The movement column: "since <day>" is the move from the first line this app recorded (the Monday snapshot), which is the opener to reason from; "lookahead" is ESPN's reported opener, often a months-old number in college, so a move from it is NOT information. Spread lines are shown from the FAVORITE's side; when you propose, give the PICKED team's own line.`,
   );
   if (p.existing.length) {
     md.push('');
@@ -152,12 +180,12 @@ export function renderPacketMarkdown(p: Packet, tz = 'America/Chicago'): string 
     md.push('');
     md.push(`## ${LEAGUE_LABEL[L.league]} — week ${L.week} (${L.games.length} games)`);
     md.push('');
-    md.push('| id | kickoff | matchup | line | movement (open → now) | weather | FPI home |');
+    md.push('| id | kickoff | matchup | line | movement (since first seen · lookahead) | weather | FPI home |');
     md.push('|---|---|---|---|---|---|---|');
     for (const g of L.games) {
       const fpi = g.detail?.fpiHome !== null && g.detail?.fpiHome !== undefined ? `${g.detail.fpiHome}%` : '';
       md.push(
-        `| ${g.id} | ${kickoffLocal(g.kickoff, tz)} | ${g.away.rank ? `#${g.away.rank} ` : ''}${g.away.abbr}${g.away.record ? ` (${g.away.record})` : ''} ${g.neutral ? 'vs' : '@'} ${g.home.rank ? `#${g.home.rank} ` : ''}${g.home.abbr}${g.home.record ? ` (${g.home.record})` : ''} | ${linesStr(g)} | ${movementStr(g)} | ${g.indoor ? 'dome' : (g.weather ?? '')} | ${fpi} |`,
+        `| ${g.id} | ${kickoffLocal(g.kickoff, tz)} | ${g.away.rank ? `#${g.away.rank} ` : ''}${g.away.abbr}${g.away.record ? ` (${g.away.record})` : ''} ${g.neutral ? 'vs' : '@'} ${g.home.rank ? `#${g.home.rank} ` : ''}${g.home.abbr}${g.home.record ? ` (${g.home.record})` : ''} | ${linesStr(g)} | ${movementStr(g, tz)} | ${g.indoor ? 'dome' : (g.weather ?? '')} | ${fpi} |`,
       );
     }
     const detailed = L.games.filter((g) => g.detail);
@@ -169,7 +197,7 @@ export function renderPacketMarkdown(p: Packet, tz = 'America/Chicago'): string 
         md.push('');
         md.push(`#### ${g.id} — ${teamLabel(g.away)} ${g.neutral ? 'vs' : '@'} ${teamLabel(g.home)}`);
         md.push(`${kickoffLocal(g.kickoff, tz)} · ${g.venue}${g.indoor ? ' (dome)' : ''}${g.tv ? ` · ${g.tv}` : ''}${g.conferenceGame ? ' · conference game' : ''}${g.neutral ? ' · neutral site' : ''}`);
-        md.push(`Lines: ${linesStr(g)}${movementStr(g) ? ` — moved: ${movementStr(g)}` : ''}`);
+        md.push(`Lines: ${linesStr(g)}${movementStr(g, tz) ? ` — moved: ${movementStr(g, tz)}` : ''}`);
         if (d.books.length > 1) md.push(`Books: ${d.books.map((b) => `${b.provider} ${b.details}${b.total ? ` o/u ${b.total}` : ''}`).join(' | ')}`);
         if (!g.indoor && (g.weather || d.precipitation !== null)) md.push(`Weather: ${g.weather ?? ''}${d.precipitation !== null ? ` · precip ${d.precipitation}%` : ''}`);
         if (d.fpiHome !== null) md.push(`ESPN FPI: ${g.home.abbr} ${d.fpiHome}% / ${g.away.abbr} ${Math.round((100 - d.fpiHome) * 10) / 10}%`);
