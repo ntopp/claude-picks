@@ -32,6 +32,8 @@ npm run dev:web
 
 Open http://localhost:5174. (`npm start` runs both with auto-restart; `npm run stop` kills stray server processes.)
 
+On the main PC a Windows scheduled task, **Claude Picks dashboard**, runs `scripts/start-hidden.vbs` at logon so both start hidden without a terminal and survive Claude app restarts (register it with `Register-ScheduledTask`; the launcher is in the repo). To restart it by hand: Task Scheduler → Run, or `Start-ScheduledTask 'Claude Picks dashboard'`. Do not also run `npm start` while it is up, or the two fight over the ports.
+
 `.env` (copy `.env.example`): **`ANTHROPIC_API_KEY` makes the app autonomous** — with `autoScan` on in Settings it researches and proposes every Thursday 8:30, reviews every Tuesday 8:30, publishes the page and pushes to your phone, with no session involved (`npm run engine:check` verifies the key; budget a few dollars a week). Without a key, use the Claude Code session flow below. `NTFY_TOPIC` sends the pushes.
 
 ## Phone
