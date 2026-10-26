@@ -175,6 +175,7 @@ export function ScoreboardPage() {
         rows={[
           ...Object.entries(sb.byRole).map(([k, b]) => [`Picks: ${k}`, b] as [string, Bucket]),
           ...Object.entries(sb.leans.byRole).map(([k, b]) => [`Leans: ${k}`, b] as [string, Bucket]),
+          ...Object.entries(sb.leans.bySide).map(([k, b]) => [`Leans: ${k}`, b] as [string, Bucket]),
           ...['Road underdog +pts', 'Home underdog +pts', 'Every favorite -pts'].filter((k) => sb.baselines[k]).map((k) => [`Baseline: ${k}`, sb.baselines[k]] as [string, Bucket]),
         ]}
         breakEven={be}

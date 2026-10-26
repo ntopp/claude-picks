@@ -94,6 +94,7 @@ export function buildReviewPacket(): string {
   for (const [k, b] of Object.entries(sb.leans.byLeague)) md.push(row(`League ${k}`, b));
   for (const [k, b] of Object.entries(sb.leans.byMarket)) md.push(row(`Market ${k}`, b));
   for (const [k, b] of Object.entries(sb.leans.byRole)) md.push(row(`${k} (spread/ML)`, b));
+  for (const [k, b] of Object.entries(sb.leans.bySide)) md.push(row(`Side: ${k}`, b));
   md.push(row('Leans at 5+ that were NOT picks', sb.leans.wouldBePicks));
   md.push('');
 

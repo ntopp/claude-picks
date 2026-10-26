@@ -135,6 +135,7 @@ ${weeks.map((d, i) => weekHtml(d, i === 0)).join('\n')}
 ${bucketRow('All leans', sb.leans.all)}
 ${sb.leans.byConfidence.map((b) => bucketRow(b.label, b.bucket)).join('')}
 ${bucketRow('Leans at 5+ that were not picks', sb.leans.wouldBePicks)}
+${Object.entries(sb.leans.bySide).map(([k, b]) => bucketRow(`Leans: ${k}`, b)).join('')}
 </tbody></table></div></div>
 <div class="card"><h2>Baselines <span class="muted" style="text-transform:none;letter-spacing:0">— dumb rules on every final game at the closing line; the picks have to beat these, not just 52.4%</span></h2><div class="tw"><table><thead><tr><th></th><th>W-L-P</th><th>Win %</th><th>Units</th><th>ROI</th><th>Avg CLV</th></tr></thead><tbody>
 ${Object.entries(sb.baselines).map(([k, b]) => bucketRow(k, b)).join('')}

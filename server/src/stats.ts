@@ -114,6 +114,8 @@ export type LeanStats = {
   byMarket: Record<string, Bucket>;
   /** Spread and moneyline leans split underdog vs favorite (totals excluded). */
   byRole: Record<string, Bucket>;
+  /** Finer: home/road x favorite/underdog, plus over/under. Where the board's profit actually sits. */
+  bySide: Record<string, Bucket>;
   /** Leans at the pick threshold (5+) but not proposed as picks: the engine's "almost" pile. */
   wouldBePicks: Bucket;
 };
@@ -144,6 +146,12 @@ function leanStats(): LeanStats {
     byLeague: grp((l) => l.league),
     byMarket: grp((l) => l.market),
     byRole: byRoleOf(leans, (l) => roleOf(l.market, l.line, l.price), (ls) => bucket(ls.map(leanScore))),
+    bySide: grp((l) => {
+      const r = roleOf(l.market, l.line, l.price);
+      if (!r) return l.side === 'under' ? 'Under' : 'Over';
+      if (r === "Pick'em") return "Pick'em";
+      return `${l.side === 'home' ? 'Home' : 'Road'} ${r.toLowerCase()}`;
+    }),
     wouldBePicks: bucket(leans.filter((l) => l.confidence >= 5 && !picked.has(l.game_id)).map(leanScore)),
   };
 }

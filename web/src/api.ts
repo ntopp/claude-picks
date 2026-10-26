@@ -94,6 +94,7 @@ export type LeanStats = {
   byLeague: Record<string, Bucket>;
   byMarket: Record<string, Bucket>;
   byRole: Record<string, Bucket>;
+  bySide: Record<string, Bucket>;
   wouldBePicks: Bucket;
 };
 
